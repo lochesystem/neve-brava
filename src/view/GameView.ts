@@ -645,10 +645,9 @@ export class GameView {
           object.receiveShadow = true;
         });
         const orientedModel = new THREE.Group();
-        // A pose da Giru já traz uma torção para a esquerda no arquivo. Esta
-        // compensação vira o conjunto para a direita e centraliza sua leitura
-        // com a direção da pista, sem alterar a inclinação do snowboard.
-        orientedModel.rotation.y = Math.PI * .70;
+        // A pose da Giru traz uma torção própria no arquivo. Compensa o eixo
+        // para que, vista pela câmera da largada, ela aponte ao centro da pista.
+        orientedModel.rotation.y = Math.PI * .575;
         orientedModel.add(model);
         this.registerCharacterModel("giru", orientedModel);
       },
