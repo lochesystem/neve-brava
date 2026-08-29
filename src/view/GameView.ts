@@ -591,7 +591,7 @@ export class GameView {
         const orientedModel = new THREE.Group();
         // O modelo do Tripo usa o mesmo eixo diagonal do snowboarder principal.
         // Alinha a prancha ao sentido da pista para ele não correr de lado.
-        orientedModel.rotation.y = Math.PI * .625;
+        orientedModel.rotation.y = Math.PI * .65;
         orientedModel.add(model);
         this.registerCharacterModel("yeti", orientedModel);
       },
@@ -619,7 +619,7 @@ export class GameView {
         const orientedModel = new THREE.Group();
         // O Guy tem alguns graus extras no eixo do arquivo. Compensa para que
         // peito, cabeça e prancha apontem ao centro da pista no repouso.
-        orientedModel.rotation.y = Math.PI * .58;
+        orientedModel.rotation.y = Math.PI * .5;
         orientedModel.add(model);
         this.registerCharacterModel("guy", orientedModel);
       },
@@ -647,7 +647,7 @@ export class GameView {
         const orientedModel = new THREE.Group();
         // A pose da Giru traz uma torção própria no arquivo. Compensa o eixo
         // para que, vista pela câmera da largada, ela aponte ao centro da pista.
-        orientedModel.rotation.y = Math.PI * .825;
+        orientedModel.rotation.y = Math.PI * .5;
         orientedModel.add(model);
         this.registerCharacterModel("giru", orientedModel);
       },
