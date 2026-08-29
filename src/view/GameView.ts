@@ -645,8 +645,10 @@ export class GameView {
           object.receiveShadow = true;
         });
         const orientedModel = new THREE.Group();
-        // Modelos gerados para a mesma pose usam o eixo diagonal da prancha.
-        orientedModel.rotation.y = Math.PI * .625;
+        // A pose da Giru já traz uma torção para a esquerda no arquivo. Esta
+        // compensação vira o conjunto para a direita e centraliza sua leitura
+        // com a direção da pista, sem alterar a inclinação do snowboard.
+        orientedModel.rotation.y = Math.PI * .70;
         orientedModel.add(model);
         this.registerCharacterModel("giru", orientedModel);
       },
