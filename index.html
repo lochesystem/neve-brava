@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#24445d" />
+    <title>Neve Brava</title>
+  </head>
+  <body>
+    <canvas id="game" aria-label="Jogo Neve Brava"></canvas>
+
+    <div id="hud" class="hud hidden" aria-live="polite">
+      <div class="hud-top">
+        <div class="paper-chip speed"><small>VELOCIDADE</small><b id="speed">0</b><span>km/h</span></div>
+        <div class="paper-chip section"><small>TRECHO</small><b id="section">Primeiras curvas</b></div>
+        <div class="paper-chip time"><small>TEMPO</small><b id="time">00:00.00</b></div>
+      </div>
+      <div class="hud-bottom">
+        <div class="score-block"><small>PONTOS</small><b id="score">000000</b></div>
+        <div class="combo-block"><span>COMBO</span><b id="combo">×1.0</b></div>
+      </div>
+      <aside class="course-minimap" aria-label="Mapa vertical da pista">
+        <header><div><small id="map-course-number">PISTA 01</small><b id="map-course-name">Vale Bravo</b></div><strong id="race-position">1º <i>/ 2</i></strong></header>
+        <svg id="course-map" viewBox="0 0 180 520" role="img" aria-label="Traçado da pista e posição atual">
+          <path class="map-shadow" id="course-map-shadow"></path>
+          <path class="map-line" id="course-map-line"></path>
+          <circle class="map-start" cx="90" cy="24" r="5"></circle>
+          <g id="course-map-rival"><circle r="9"></circle><path d="M-5 -3 L0 -8 L5 -3 L4 6 L-4 6 Z"></path></g>
+          <g id="course-map-marker"><circle r="10"></circle><path d="M0 -6 L6 6 L0 3 L-6 6 Z"></path></g>
+          <path class="map-finish" d="M78 496h24v12H78z"></path>
+        </svg>
+        <footer><span>PARTIDA</span><span>META</span></footer>
+      </aside>
+      <div id="toast" class="toast"></div>
+      <div id="countdown" class="countdown"></div>
+      <div id="dev-badge" class="dev-badge hidden">MODO DEV · TECLADO</div>
+    </div>
+
+    <main id="menu" class="menu-shell">
+      <section id="title-screen" class="screen title-screen">
+        <div class="title-layout">
+          <div class="title-brand">
+            <div class="mountain-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+            <p class="eyebrow">CAMPEONATO DA MONTANHA · TEMPORADA 01</p>
+            <h1><span>NEVE</span><strong>BRAVA</strong></h1>
+            <p class="tagline">Quatro montanhas. Quatro linhas.<br />Uma campanha para dominar.</p>
+          </div>
+          <div class="title-panel">
+            <p class="panel-kicker">PRONTO PARA DESCER?</p>
+            <h2>Escolha sua<br />montanha.</h2>
+            <p>Curvas desenhadas à mão, velocidade alta e uma nova assinatura em cada pista.</p>
+            <div id="controller-card" class="controller-card">
+              <span class="controller-light"></span>
+              <div><small>CONTROLE OBRIGATÓRIO</small><b id="controller-name">Conecte o DualSense e pressione um botão</b></div>
+            </div>
+            <div class="menu-actions">
+              <button id="campaign-button" class="primary focusable"><span>✕</span> MODO CAMPANHA</button>
+              <button id="settings-button" class="secondary focusable">CONFIGURAÇÕES</button>
+            </div>
+            <p id="dev-hint" class="dev-hint">Para testes sem controle, abra com <code>?dev=1</code>.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="campaign-screen" class="screen campaign-screen hidden">
+        <header class="campaign-head">
+          <div><p class="eyebrow">MODO CAMPANHA</p><h2>Mapa da montanha</h2><p>Escolha uma etapa. Cada traçado usa curvas, relevo e obstáculos próprios.</p></div>
+          <button id="campaign-back-button" class="secondary focusable">← VOLTAR</button>
+        </header>
+        <div id="track-grid" class="track-grid"></div>
+        <div class="campaign-footer">
+          <div><small>ETAPA SELECIONADA</small><b id="selected-track-name">Vale Bravo</b><span id="selected-track-copy">A linha de abertura</span></div>
+          <button id="start-button" class="primary focusable" disabled><span>✕</span> COMEÇAR ETAPA</button>
+        </div>
+      </section>
+
+      <section id="pause-screen" class="screen modal hidden">
+        <p class="eyebrow">A MONTANHA ESPERA</p>
+        <h2 id="pause-title">Pausado</h2>
+        <p id="pause-copy">Respire. A linha continua logo ali.</p>
+        <div class="menu-actions">
+          <button id="resume-button" class="primary focusable"><span>✕</span> CONTINUAR</button>
+          <button id="pause-settings-button" class="secondary focusable">CONFIGURAÇÕES</button>
+          <button id="quit-button" class="secondary focusable">VOLTAR AO INÍCIO</button>
+        </div>
+      </section>
+
+      <section id="results-screen" class="screen results hidden">
+        <p class="eyebrow">DESCIDA CONCLUÍDA</p>
+        <h2 id="result-course">Você deixou um risco<br />na montanha.</h2>
+        <div class="result-grid">
+          <div><small>TEMPO</small><b id="result-time">00:00.00</b></div>
+          <div><small>PONTOS</small><b id="result-score">0</b></div>
+          <div><small>MAIOR COMBO</small><b id="result-combo">×1.0</b></div>
+          <div><small>MELHOR MANOBRA</small><b id="result-trick">—</b></div>
+          <div><small>NEAR MISSES</small><b id="result-near">0</b></div>
+          <div><small>QUEDAS</small><b id="result-crashes">0</b></div>
+          <div><small>POSIÇÃO</small><b id="result-position">1º</b></div>
+          <div><small>RIVAL · YETI</small><b id="result-rival">—</b></div>
+        </div>
+        <div class="menu-actions">
+          <button id="next-track-button" class="primary focusable"><span>✕</span> PRÓXIMA PISTA</button>
+          <button id="restart-button" class="secondary focusable">DESCER DE NOVO</button>
+          <button id="result-title-button" class="secondary focusable">MENU INICIAL</button>
+        </div>
+      </section>
+
+      <section id="settings-screen" class="screen modal settings hidden">
+        <p class="eyebrow">AJUSTE A PRANCHA</p>
+        <h2>Configurações</h2>
+        <div class="setting-row">
+          <div><b>Qualidade visual</b><small>Preserva obstáculos em todos os perfis.</small></div>
+          <div class="segmented" data-setting="quality">
+            <button class="focusable" data-quality="performance">Performance</button>
+            <button class="focusable active" data-quality="medium">Média</button>
+            <button class="focusable" data-quality="high">Alta</button>
+          </div>
+        </div>
+        <label class="setting-row">
+          <div><b>Intensidade da vibração</b><small id="vibration-value">72%</small></div>
+          <input id="vibration" class="focusable" type="range" min="0" max="100" value="72" />
+        </label>
+        <label class="setting-row">
+          <div><b>Volume da música</b><small id="music-volume-value">38%</small></div>
+          <input id="music-volume" class="focusable" type="range" min="0" max="100" value="38" />
+        </label>
+        <label class="setting-row">
+          <div><b>Deadzone dos analógicos</b><small id="deadzone-value">16%</small></div>
+          <input id="deadzone" class="focusable" type="range" min="8" max="30" value="16" />
+        </label>
+        <div class="control-map">
+          <span><i>L</i> Carving</span><span><i>R2</i> Tuck</span><span><i>L2</i> Freio</span>
+          <span><i>✕</i> Ollie</span><span><i>□</i> Grab</span><span><i>L1/R1</i> Giro</span>
+          <span><i>△</i> Flip</span><span><i>○</i> Preparar pouso</span><span><i>☰</i> Pausa</span>
+        </div>
+        <button id="settings-back-button" class="primary focusable"><span>○</span> VOLTAR</button>
+      </section>
+    </main>
+
+    <div class="grain" aria-hidden="true"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
