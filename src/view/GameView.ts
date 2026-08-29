@@ -657,10 +657,13 @@ export class GameView {
     const frame = courseFrame(state.s);
     const groundY = courseTerrainHeight(state.s, state.x);
     const surfaceOffset = Math.max(0, state.y - courseHeight(state.s) - .52);
+    // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
+    // a sola dentro da camada superficial da neve sem afundar o personagem.
+    const snowContactInset = state.id === "yeti" ? .14 : .085;
     group.visible = state.s < COURSE_LENGTH + 4;
     // Usa o relevo lateral real, não apenas a altura da linha central. O pequeno
     // encaixe evita a fresta entre a base da prancha e a neve.
-    group.position.set(world.x, groundY + surfaceOffset - .035, world.z);
+    group.position.set(world.x, groundY + surfaceOffset - snowContactInset, world.z);
     group.rotation.set(
       state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
       frame.heading + state.heading + (state.grounded ? 0 : state.spin * clamp(state.airTime / .9, 0, 1)),

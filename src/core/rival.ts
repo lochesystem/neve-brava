@@ -52,11 +52,11 @@ export type RivalProfile = Pick<RivalState, "id" | "name" | "linePhase" | "paceB
 };
 
 export const YETI_PROFILE: RivalProfile = {
-  id: "yeti", name: "YETI", startX: 3.1, linePhase: 0, paceBias: .15, aggression: 1, rampAffinity: .8,
+  id: "yeti", name: "YETI", startX: 3.1, linePhase: 0, paceBias: 1.55, aggression: 1, rampAffinity: .8,
 };
 
 export const GUY_PROFILE: RivalProfile = {
-  id: "guy", name: "GUY", startX: -3.15, linePhase: 2.35, paceBias: -.1, aggression: .68, rampAffinity: 1.55,
+  id: "guy", name: "GUY", startX: -3.15, linePhase: 2.35, paceBias: 1.15, aggression: .68, rampAffinity: 1.55,
 };
 
 export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
@@ -166,10 +166,12 @@ export function updateRival(state: RivalState, playerS: number, playerX: number,
 
   const coursePace = 43 + getActiveCourse().order * .3 + state.paceBias;
   const gap = playerS - state.s;
-  const catchUp = clamp(gap * .18, -3.4, 3.4);
+  // Recupera terreno com firmeza, mas desacelera quando abre vantagem para a
+  // disputa continuar legível e não virar uma perseguição impossível.
+  const catchUp = clamp(gap * .22, -3.5, 4.5);
   const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * 1.15;
-  const targetSpeed = clamp(coursePace + catchUp + rhythm, 34, 45);
-  state.speed += clamp(targetSpeed - state.speed, -5.5 * step, 6.8 * step);
+  const targetSpeed = clamp(coursePace + catchUp + rhythm, 35, 47.5);
+  state.speed += clamp(targetSpeed - state.speed, -5.5 * step, 7.6 * step);
 
   const desiredLateral = clamp((state.targetX - state.x) * 1.15, -10.5, 10.5);
   state.lateralSpeed += clamp(desiredLateral - state.lateralSpeed, -18 * step, 18 * step);

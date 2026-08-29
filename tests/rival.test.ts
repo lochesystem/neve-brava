@@ -51,6 +51,15 @@ describe("rivais", () => {
     expect(behind.speed - ahead.speed).toBeLessThanOrEqual(6);
   });
 
+  it("pressiona acima da velocidade máxima de chão do jogador quando fica para trás", () => {
+    for (const profile of [YETI_PROFILE, GUY_PROFILE]) {
+      const rival = createRival(profile);
+      for (let index = 0; index < 600; index += 1) updateRival(rival, rival.s + 100, 0, 1 / 60);
+      expect(rival.speed).toBeGreaterThan(45);
+      expect(rival.speed).toBeLessThanOrEqual(47.5);
+    }
+  });
+
   it("interpola o movimento sem saltos visuais", () => {
     const previous = createRival();
     const current = { ...previous, s: 10, x: -4, y: previous.y - 1, heading: .4 };
