@@ -606,7 +606,7 @@ export class GameView {
         const orientedModel = new THREE.Group();
         // O Guy tem alguns graus extras no eixo do arquivo. Compensa para que
         // peito, cabeça e prancha apontem ao centro da pista no repouso.
-        orientedModel.rotation.y = Math.PI * .6;
+        orientedModel.rotation.y = Math.PI * .58;
         orientedModel.add(model);
         this.registerCharacterModel("guy", orientedModel);
       },
