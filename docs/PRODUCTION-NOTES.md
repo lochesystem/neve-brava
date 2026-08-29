@@ -1,6 +1,6 @@
 # Notas de produção
 
-> Projeto: Neve Brava
+> Projeto: Snow Rush
 > Versão: 0.1
 > Atualizado em: 2026-08-28
 > Status: vertical slice implementado; hardware a validar

@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#24445d" />
-    <title>Neve Brava</title>
+    <title>Snow Rush</title>
   </head>
   <body>
-    <canvas id="game" aria-label="Jogo Neve Brava"></canvas>
+    <canvas id="game" aria-label="Jogo Snow Rush"></canvas>
 
     <div id="hud" class="hud hidden" aria-live="polite">
       <div class="hud-top">
@@ -46,15 +46,18 @@
       <section id="title-screen" class="screen title-screen">
         <div class="title-layout">
           <div class="title-brand">
-            <div class="mountain-mark" aria-hidden="true"><i></i><i></i><i></i></div>
-            <p class="eyebrow">CAMPEONATO DA MONTANHA · TEMPORADA 01</p>
-            <h1><span>NEVE</span><strong>BRAVA</strong></h1>
-            <p class="tagline">Quatro montanhas. Quatro linhas.<br />Uma campanha para dominar.</p>
+            <img class="title-hero" src="%BASE_URL%images/snow-rush-hero.png" alt="" aria-hidden="true" />
+            <div class="title-brand-copy">
+              <div class="mountain-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+              <p class="eyebrow">CAMPEONATO DA MONTANHA · TEMPORADA 01</p>
+              <h1><span>SNOW</span><strong>RUSH</strong></h1>
+              <p class="tagline">Quatro pilotos. Quatro montanhas.<br />Uma corrida até o limite.</p>
+            </div>
           </div>
           <div class="title-panel">
-            <p class="panel-kicker">PRONTO PARA DESCER?</p>
-            <h2>Escolha sua<br />montanha.</h2>
-            <p>Curvas desenhadas à mão, velocidade alta e uma nova assinatura em cada pista.</p>
+            <p class="panel-kicker">A MONTANHA CHAMOU.</p>
+            <h2>Corra pela<br />tempestade.</h2>
+            <p>Escolha seu piloto, domine as curvas e use tudo o que encontrar para chegar primeiro.</p>
             <div id="controller-card" class="controller-card">
               <span class="controller-light"></span>
               <div><small>CONTROLE OBRIGATÓRIO</small><b id="controller-name">Conecte o DualSense e pressione um botão</b></div>

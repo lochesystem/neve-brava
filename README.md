@@ -1,4 +1,4 @@
-# Neve Brava
+# Snow Rush
 
 Jogue a versão publicada em: **https://lochesystem.github.io/neve-brava/**
 
