@@ -4,15 +4,16 @@ import {
   type CourseDefinition,
 } from "./core/course.ts";
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
+import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
 import {
   applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
-  updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
+  RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
 import { AudioManager } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
 
-type Screen = "title" | "campaign" | "playing" | "paused" | "results" | "settings";
+type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
@@ -20,6 +21,7 @@ const hud = document.querySelector<HTMLElement>("#hud")!;
 const menu = document.querySelector<HTMLElement>("#menu")!;
 const titleScreen = document.querySelector<HTMLElement>("#title-screen")!;
 const campaignScreen = document.querySelector<HTMLElement>("#campaign-screen")!;
+const characterScreen = document.querySelector<HTMLElement>("#character-screen")!;
 const pauseScreen = document.querySelector<HTMLElement>("#pause-screen")!;
 const resultsScreen = document.querySelector<HTMLElement>("#results-screen")!;
 const settingsScreen = document.querySelector<HTMLElement>("#settings-screen")!;
@@ -37,6 +39,7 @@ let previousGuy: RivalState = { ...guy };
 let screen: Screen = "title";
 let settingsReturn: Screen = "title";
 let selectedCourseIndex = 0;
+let selectedCharacter: CharacterId = "snowman";
 let accumulator = 0;
 let previousTime = performance.now();
 let countdown = 3.35;
@@ -151,6 +154,7 @@ function showScreen(next: Screen): void {
   screen = next;
   titleScreen.classList.toggle("hidden", next !== "title");
   campaignScreen.classList.toggle("hidden", next !== "campaign");
+  characterScreen.classList.toggle("hidden", next !== "character");
   pauseScreen.classList.toggle("hidden", next !== "paused");
   resultsScreen.classList.toggle("hidden", next !== "results");
   settingsScreen.classList.toggle("hidden", next !== "settings");
@@ -160,9 +164,37 @@ function showScreen(next: Screen): void {
 }
 
 function openCampaign(): void {
+  view.setSelectionMode(false);
   renderTrackCards();
   updateSelectedCourseCopy();
   showScreen("campaign");
+}
+
+function createOpponent(character: CharacterId, startX: number): RivalState {
+  return createRival({ ...RIVAL_PROFILES[character], startX });
+}
+
+function updateCharacterSelection(): void {
+  const character = characterById(selectedCharacter);
+  $("#selected-character-name").textContent = character.name.toUpperCase();
+  $("#character-confirm-button").innerHTML = `<span>✕</span> CORRER COM ${character.name.toUpperCase()}`;
+  document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button =>
+    button.classList.toggle("selected", button.dataset.character === selectedCharacter));
+  view.setCharacterSelection(selectedCharacter);
+}
+
+function openCharacterSelect(): void {
+  if (!input.compatible && !input.usingDevFallback) return;
+  const course = setActiveCourse(COURSES[selectedCourseIndex].id);
+  view.rebuildCourse();
+  state = createRider(); previousRider = { ...state };
+  rival = createOpponent("yeti", 3.1); previousRival = { ...rival };
+  guy = createOpponent("guy", -3.15); previousGuy = { ...guy };
+  view.setRacerCharacters("snowman", "yeti", "guy");
+  view.setSelectionMode(true);
+  $("#character-course").textContent = `${course.name} · ETAPA ${String(course.order).padStart(2, "0")}`;
+  updateCharacterSelection();
+  showScreen("character");
 }
 
 function startRun(): void {
@@ -174,10 +206,13 @@ function startRun(): void {
   audio.start();
   state = createRider();
   previousRider = { ...state };
-  rival = createRival(YETI_PROFILE);
+  const opponents = CHARACTERS.map(character => character.id).filter(character => character !== selectedCharacter);
+  rival = createOpponent(opponents[0], 3.1);
   previousRival = { ...rival };
-  guy = createRival(GUY_PROFILE);
+  guy = createOpponent(opponents[1], -3.15);
   previousGuy = { ...guy };
+  view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1]);
+  view.setSelectionMode(false);
   accumulator = 0;
   countdown = 3.35;
   disconnectedPause = false;
@@ -303,7 +338,7 @@ function updateControllerStatus(): void {
 }
 
 function focusables(): HTMLElement[] {
-  const active = [titleScreen, campaignScreen, pauseScreen, resultsScreen, settingsScreen].find(element => !element.classList.contains("hidden"));
+  const active = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen].find(element => !element.classList.contains("hidden"));
   return active ? Array.from(active.querySelectorAll<HTMLElement>(".focusable:not(:disabled)")) : [];
 }
 function focusFirst(): void {
@@ -322,7 +357,10 @@ function updateMenuInput(): void {
   const direction = input.consumeAnyDirection(); if (direction) navigateMenu(direction);
   if (input.consumeMenu("confirm")) (document.activeElement as HTMLElement | null)?.click();
   if (input.consumeMenu("back")) {
-    if (screen === "settings") closeSettings(); else if (screen === "campaign") showScreen("title"); else if (screen === "paused") resume();
+    if (screen === "settings") closeSettings();
+    else if (screen === "character") openCampaign();
+    else if (screen === "campaign") showScreen("title");
+    else if (screen === "paused") resume();
   }
   if (input.consumeMenu("pause") && screen === "paused" && !disconnectedPause) resume();
 }
@@ -369,7 +407,14 @@ function frame(now: number): void {
 
 $("#campaign-button").addEventListener("click", openCampaign);
 $("#campaign-back-button").addEventListener("click", () => showScreen("title"));
-startButton.addEventListener("click", startRun);
+startButton.addEventListener("click", openCharacterSelect);
+$("#character-back-button").addEventListener("click", openCampaign);
+$("#character-confirm-button").addEventListener("click", startRun);
+document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button => button.addEventListener("click", () => {
+  selectedCharacter = button.dataset.character as CharacterId;
+  updateCharacterSelection();
+  window.setTimeout(() => button.focus({ preventScroll: true }), 0);
+}));
 $("#settings-button").addEventListener("click", openSettings);
 $("#pause-settings-button").addEventListener("click", openSettings);
 $("#settings-back-button").addEventListener("click", closeSettings);
@@ -378,7 +423,7 @@ $("#quit-button").addEventListener("click", openCampaign);
 $("#restart-button").addEventListener("click", startRun);
 $("#result-title-button").addEventListener("click", () => showScreen("title"));
 $("#next-track-button").addEventListener("click", () => {
-  if (selectedCourseIndex < COURSES.length - 1) { selectedCourseIndex += 1; startRun(); } else { selectedCourseIndex = 0; openCampaign(); }
+  if (selectedCourseIndex < COURSES.length - 1) { selectedCourseIndex += 1; openCharacterSelect(); } else { selectedCourseIndex = 0; openCampaign(); }
 });
 
 function safeStorageGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
@@ -396,7 +441,11 @@ deadzone.addEventListener("input", () => { input.setSettings({ deadzone: Number(
 
 window.addEventListener("keydown", event => {
   if (event.key.toLowerCase() === "escape") {
-    if (screen === "playing") pause(); else if (screen === "paused" && !disconnectedPause) resume(); else if (screen === "settings") closeSettings(); else if (screen === "campaign") showScreen("title");
+    if (screen === "playing") pause();
+    else if (screen === "paused" && !disconnectedPause) resume();
+    else if (screen === "settings") closeSettings();
+    else if (screen === "character") openCampaign();
+    else if (screen === "campaign") showScreen("title");
   }
   if (event.key.toLowerCase() === "d" && event.altKey) view.setDebug(true);
 });

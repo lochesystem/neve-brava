@@ -79,6 +79,20 @@
         </div>
       </section>
 
+      <section id="character-screen" class="screen character-screen hidden">
+        <header class="character-head">
+          <button id="character-back-button" class="secondary focusable">← PISTAS</button>
+          <div><p class="eyebrow">ESCALAÇÃO DA ETAPA</p><h2>Escolha seu piloto</h2><p id="character-course">Vale Bravo · ETAPA 01</p></div>
+          <div class="player-flag"><b>1P</b><span id="selected-character-name">NEVINHO</span></div>
+        </header>
+        <div class="character-roster" aria-label="Personagens disponíveis">
+          <button class="character-card guy focusable" data-character="guy" type="button"><i>1P</i><span class="character-glyph">G</span><strong>GUY</strong><small>Linha rápida e precisa</small></button>
+          <button class="character-card snowman selected focusable" data-character="snowman" type="button"><i>1P</i><span class="character-glyph">●</span><strong>NEVINHO</strong><small>O clássico da montanha</small></button>
+          <button class="character-card yeti focusable" data-character="yeti" type="button"><i>1P</i><span class="character-glyph">Y</span><strong>YETI</strong><small>Força bruta na neve</small></button>
+        </div>
+        <button id="character-confirm-button" class="primary character-confirm focusable"><span>✕</span> CORRER COM NEVINHO</button>
+      </section>
+
       <section id="pause-screen" class="screen modal hidden">
         <p class="eyebrow">A MONTANHA ESPERA</p>
         <h2 id="pause-title">Pausado</h2>

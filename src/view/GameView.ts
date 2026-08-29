@@ -19,6 +19,7 @@ import {
 import { dampAlpha, clamp } from "../core/math.ts";
 import { CRASH_RECOVERY_TIME, type GameEvent, type RiderState } from "../core/simulation.ts";
 import type { RivalState } from "../core/rival.ts";
+import type { CharacterId } from "../core/characters.ts";
 
 export type Quality = "high" | "medium" | "performance";
 
@@ -472,6 +473,14 @@ export class GameView {
   private snowfall: THREE.Points | null = null;
   private snowfallPositions: Float32Array | null = null;
   private skyDome: THREE.Mesh | null = null;
+  private characterModels = new Map<CharacterId, THREE.Group>();
+  private racerCharacters: { player: CharacterId; first: CharacterId; second: CharacterId } = { player: "snowman", first: "yeti", second: "guy" };
+  private selectedCharacter: CharacterId = "snowman";
+  private selectionMode = false;
+  private selectionRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.28, .12, 7, 30),
+    new THREE.MeshBasicMaterial({ color: PALETTE.yellow, transparent: true, opacity: .92, depthWrite: false }),
+  );
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -501,7 +510,9 @@ export class GameView {
     this.rivalShadow.scale.set(1.9, .7, 1);
     this.guyShadow.rotation.x = -Math.PI / 2;
     this.guyShadow.scale.set(1.8, .66, 1);
-    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.debugLines);
+    this.selectionRing.rotation.x = -Math.PI / 2;
+    this.selectionRing.visible = false;
+    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.selectionRing, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
     this.loadGuyModel();
@@ -531,10 +542,7 @@ export class GameView {
         // Este ponto médio remove o desvio visual para a esquerda ou direita.
         orientedModel.rotation.y = Math.PI * 0.625;
         orientedModel.add(model);
-        this.riderVisual.clear();
-        this.riderVisual.scale.setScalar(1);
-        this.riderVisual.add(orientedModel);
-        this.hips = null;
+        this.registerCharacterModel("snowman", orientedModel);
       },
       undefined,
       error => console.warn("Não foi possível carregar o snowboarder 3D; mantendo o placeholder.", error),
@@ -562,9 +570,7 @@ export class GameView {
         // Alinha a prancha ao sentido da pista para ele não correr de lado.
         orientedModel.rotation.y = Math.PI * .625;
         orientedModel.add(model);
-        this.rivalVisual.clear();
-        this.rivalVisual.scale.setScalar(1);
-        this.rivalVisual.add(orientedModel);
+        this.registerCharacterModel("yeti", orientedModel);
       },
       undefined,
       error => console.warn("Não foi possível carregar o yeti rival; mantendo o placeholder.", error),
@@ -591,13 +597,48 @@ export class GameView {
         // Os personagens gerados pelo Tripo compartilham o mesmo eixo diagonal.
         orientedModel.rotation.y = Math.PI * .625;
         orientedModel.add(model);
-        this.guyVisual.clear();
-        this.guyVisual.scale.setScalar(1);
-        this.guyVisual.add(orientedModel);
+        this.registerCharacterModel("guy", orientedModel);
       },
       undefined,
       error => console.warn("Não foi possível carregar o Guy rival; mantendo o placeholder.", error),
     );
+  }
+
+  private registerCharacterModel(id: CharacterId, model: THREE.Group): void {
+    this.characterModels.set(id, model);
+    this.refreshCharacterModels();
+  }
+
+  private refreshCharacterModels(): void {
+    const slots: Array<{ visual: THREE.Group; id: CharacterId; player: boolean }> = [
+      { visual: this.riderVisual, id: this.racerCharacters.player, player: true },
+      { visual: this.rivalVisual, id: this.racerCharacters.first, player: false },
+      { visual: this.guyVisual, id: this.racerCharacters.second, player: false },
+    ];
+    for (const slot of slots) {
+      const template = this.characterModels.get(slot.id);
+      if (!template) continue;
+      const instance = template.clone(true);
+      if (slot.player) instance.position.y = slot.id === "yeti" ? -.21 : slot.id === "guy" ? -.155 : -.07;
+      slot.visual.clear();
+      slot.visual.scale.setScalar(1);
+      slot.visual.add(instance);
+    }
+    this.hips = this.characterModels.has(this.racerCharacters.player) ? null : this.riderVisual.getObjectByName("hips") as THREE.Group;
+  }
+
+  setRacerCharacters(player: CharacterId, first: CharacterId, second: CharacterId): void {
+    this.racerCharacters = { player, first, second };
+    this.refreshCharacterModels();
+  }
+
+  setCharacterSelection(character: CharacterId): void {
+    this.selectedCharacter = character;
+  }
+
+  setSelectionMode(enabled: boolean): void {
+    this.selectionMode = enabled;
+    this.selectionRing.visible = enabled;
   }
 
   setQuality(quality: Quality): void {
@@ -712,7 +753,19 @@ export class GameView {
     }
     this.updateOpponent(rivalState, this.rival, this.rivalVisual, this.rivalShadow, dt);
     this.updateOpponent(guyState, this.guy, this.guyVisual, this.guyShadow, dt);
+    this.updateSelectionRing(state, rivalState, guyState);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private updateSelectionRing(player: RiderState, first: RivalState, second: RivalState): void {
+    if (!this.selectionMode) { this.selectionRing.visible = false; return; }
+    this.selectionRing.visible = true;
+    const selected = this.selectedCharacter === this.racerCharacters.player ? player
+      : this.selectedCharacter === this.racerCharacters.first ? first : second;
+    const world = courseWorldPoint(selected.s, selected.x);
+    this.selectionRing.position.set(world.x, courseTerrainHeight(selected.s, selected.x) + .075, world.z);
+    const pulse = 1 + Math.sin(this.elapsedVisual * 5) * .09;
+    this.selectionRing.scale.setScalar(pulse);
   }
 
   private updateOpponent(state: RivalState, group: THREE.Group, visual: THREE.Group, shadow: THREE.Mesh, dt: number): void {
@@ -722,7 +775,7 @@ export class GameView {
     const surfaceOffset = Math.max(0, state.y - courseHeight(state.s) - .52);
     // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
     // a sola dentro da camada superficial da neve sem afundar o personagem.
-    const snowContactInset = state.id === "yeti" ? .14 : .085;
+    const snowContactInset = state.id === "yeti" ? .14 : state.id === "guy" ? .085 : .035;
     group.visible = state.s < COURSE_LENGTH + 4;
     // Usa o relevo lateral real, não apenas a altura da linha central. O pequeno
     // encaixe evita a fresta entre a base da prancha e a neve.

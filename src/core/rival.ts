@@ -11,6 +11,7 @@ import {
 } from "./course.ts";
 import { clamp, lerp, wrapAngle } from "./math.ts";
 import type { RiderState } from "./simulation.ts";
+import type { CharacterId } from "./characters.ts";
 
 export type RivalEvent =
   | { type: "RIVAL_CRASH" }
@@ -19,7 +20,7 @@ export type RivalEvent =
   | { type: "RIVAL_FINISH" };
 
 export type RivalState = {
-  id: "yeti" | "guy";
+  id: CharacterId;
   name: string;
   linePhase: number;
   paceBias: number;
@@ -59,6 +60,16 @@ export const YETI_PROFILE: RivalProfile = {
 
 export const GUY_PROFILE: RivalProfile = {
   id: "guy", name: "GUY", startX: -3.15, linePhase: 2.35, paceBias: 1.15, aggression: .68, rampAffinity: 1.55,
+};
+
+export const SNOWMAN_PROFILE: RivalProfile = {
+  id: "snowman", name: "NEVINHO", startX: 3.1, linePhase: 1.15, paceBias: 1.35, aggression: .82, rampAffinity: 1.12,
+};
+
+export const RIVAL_PROFILES: Record<CharacterId, RivalProfile> = {
+  snowman: SNOWMAN_PROFILE,
+  yeti: YETI_PROFILE,
+  guy: GUY_PROFILE,
 };
 
 export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
