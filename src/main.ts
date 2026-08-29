@@ -107,6 +107,40 @@ const mapGuy = document.querySelector<SVGGElement>("#course-map-guy")!;
 const mapGiru = document.querySelector<SVGGElement>("#course-map-giru")!;
 const mapStart = document.querySelector<SVGCircleElement>(".map-start")!;
 const mapFinish = document.querySelector<SVGPathElement>(".map-finish")!;
+const installButton = $("#install-button") as HTMLButtonElement;
+const installHint = $("#install-hint");
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+let installPrompt: InstallPromptEvent | null = null;
+
+function isStandalone(): boolean {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
+function setupPwa(): void {
+  if ("serviceWorker" in navigator && import.meta.env.PROD) {
+    window.addEventListener("load", () => {
+      void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL });
+    });
+  }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (ios && !isStandalone()) installButton.classList.remove("hidden");
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    installPrompt = event as InstallPromptEvent;
+    installButton.classList.remove("hidden");
+  });
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    installButton.classList.add("hidden");
+    installHint.classList.add("hidden");
+  });
+}
+
+setupPwa();
 
 function centerFor(course: CourseDefinition, s: number): number {
   const progress = Math.min(course.length, Math.max(0, s));
@@ -482,6 +516,17 @@ function frame(now: number): void {
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);
+installButton.addEventListener("click", async () => {
+  ensureMenuMusic();
+  if (installPrompt) {
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") installButton.classList.add("hidden");
+    installPrompt = null;
+    return;
+  }
+  installHint.classList.toggle("hidden");
+});
 $("#campaign-back-button").addEventListener("click", () => showScreen("title"));
 startButton.addEventListener("click", openCharacterSelect);
 $("#character-back-button").addEventListener("click", openCampaign);

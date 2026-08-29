@@ -287,6 +287,8 @@ button span { margin-right: 8px; }
 .secondary { background: var(--paper); }
 .dev-hint { color: rgba(255,255,255,.78); font-size: 11px; }
 .dev-hint code { color: white; }
+.install-button { background: #d9eef0; }
+.install-hint { width: min(390px,100%); margin: 9px auto 0; padding: 7px 10px; color: var(--ink); background: rgba(255,255,255,.72); border-radius: 8px; font-size: 11px; font-weight: 700; }
 
 .modal, .results {
   padding: 28px 34px 34px;
@@ -562,6 +564,7 @@ button span { margin-right: 8px; }
   .mobile-mode .menu-actions { gap: 5px; }
   .mobile-mode button { min-height: 34px; padding: 7px 11px; font-size: 11px; }
   .mobile-mode .dev-hint { display: none; }
+  .mobile-mode .install-hint { margin-top: 5px; padding: 4px 7px; font-size: 9px; }
 
   .mobile-mode .campaign-screen { width: calc(100vw - 20px); height: calc(100vh - 14px); padding: 10px; overflow: hidden; }
   .mobile-mode .campaign-head { display: flex; margin-bottom: 6px; }

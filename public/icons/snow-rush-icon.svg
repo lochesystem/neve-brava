@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#72bedb"/>
+      <stop offset="1" stop-color="#eaf7fb"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <path d="M0 356 112 232l62 69 90-139 104 147 55-64 89 111v156H0Z" fill="#fff" opacity=".96"/>
+  <path d="m136 181 55-83 55 83Z" fill="#f8f2df"/>
+  <path d="m190 181 76-119 77 119Z" fill="#ffc94f"/>
+  <path d="m293 181 54-83 55 83Z" fill="#f8f2df"/>
+  <g transform="rotate(-4 256 283)" font-family="Impact,Arial Black,sans-serif" font-style="italic" font-weight="900" text-anchor="middle" stroke="#253348" stroke-width="13" stroke-linejoin="round" paint-order="stroke fill">
+    <text x="256" y="278" font-size="117" fill="#f8f2df">SNOW</text>
+    <text x="256" y="386" font-size="128" fill="#ffc94f">RUSH</text>
+  </g>
+  <path d="M88 430c112 31 229 25 341-19" fill="none" stroke="#57c8ad" stroke-width="18" stroke-linecap="round"/>
+</svg>
