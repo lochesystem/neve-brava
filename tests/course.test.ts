@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COINS, COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, OBSTACLES, RAMPS, courseCenterX, courseFrame, courseHeight, setActiveCourse, validateAllCourses, validateCourse } from "../src/core/course.ts";
+import { COINS, COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, OBSTACLES, RAMPS, courseCenterX, courseFrame, courseHeight, obstacleConflictsWithRamp, setActiveCourse, validateAllCourses, validateCourse } from "../src/core/course.ts";
 
 describe("pista", () => {
   it("possui duração, conteúdo e geometria válidos", () => {
@@ -47,6 +47,17 @@ describe("pista", () => {
       expect(OBSTACLES.some(item => !item.decorative)).toBe(true);
       expect(new Set(ITEM_BOXES.map(box => box.item))).toEqual(new Set(["wind", "turbo", "shield"]));
       expect(courseHeight(COURSE_LENGTH)).toBeLessThan(courseHeight(0) - 300);
+    }
+    setActiveCourse(COURSES[0].id);
+  });
+
+  it("mantém aproximação, superfície e recepção das rampas livres de obstáculos", () => {
+    for (const course of COURSES) {
+      setActiveCourse(course.id);
+      const conflicts = OBSTACLES.filter(obstacle => !obstacle.decorative)
+        .flatMap(obstacle => RAMPS.filter(ramp => obstacleConflictsWithRamp(obstacle, ramp))
+          .map(ramp => `${obstacle.id} sobre ${ramp.id}`));
+      expect(conflicts, course.name).toEqual([]);
     }
     setActiveCourse(COURSES[0].id);
   });

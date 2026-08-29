@@ -44,12 +44,13 @@
 
     <main id="menu" class="menu-shell">
       <section id="title-screen" class="screen title-screen">
+        <div id="title-snow" class="title-snow" aria-hidden="true"></div>
         <div class="title-layout">
           <div class="title-brand">
             <img class="title-hero" src="%BASE_URL%images/snow-rush-hero.png" alt="" aria-hidden="true" />
             <div class="title-brand-copy">
               <div class="mountain-mark" aria-hidden="true"><i></i><i></i><i></i></div>
-              <p class="eyebrow">CAMPEONATO DA MONTANHA · TEMPORADA 01</p>
+              <p class="eyebrow"> </p>
               <h1><span>SNOW</span><strong>RUSH</strong></h1>
               <p class="tagline">Quatro pilotos. Quatro montanhas.<br />Uma corrida até o limite.</p>
             </div>
@@ -90,10 +91,10 @@
           <div class="player-flag"><b>1P</b><span id="selected-character-name">NEVINHO</span></div>
         </header>
         <div class="character-roster" aria-label="Personagens disponíveis">
-          <button class="character-card guy focusable" data-character="guy" type="button"><i>1P</i><span class="character-glyph">G</span><strong>GUY</strong><small>Linha rápida e precisa</small></button>
-          <button class="character-card snowman selected focusable" data-character="snowman" type="button"><i>1P</i><span class="character-glyph">●</span><strong>NEVINHO</strong><small>O clássico da montanha</small></button>
-          <button class="character-card yeti focusable" data-character="yeti" type="button"><i>1P</i><span class="character-glyph">Y</span><strong>YETI</strong><small>Força bruta na neve</small></button>
-          <button class="character-card giru focusable" data-character="giru" type="button"><i>1P</i><span class="character-glyph">◆</span><strong>GIRU</strong><small>Rainha da nevasca</small></button>
+          <button class="character-card guy focusable" data-character="guy" type="button"><i>1P</i><img class="character-portrait" src="%BASE_URL%images/characters/guy.png" alt="" /><span class="character-card-copy"><strong>GUY</strong><small>Linha rápida e precisa</small></span></button>
+          <button class="character-card snowman selected focusable" data-character="snowman" type="button"><i>1P</i><img class="character-portrait" src="%BASE_URL%images/characters/snowman.png" alt="" /><span class="character-card-copy"><strong>NEVINHO</strong><small>O clássico da montanha</small></span></button>
+          <button class="character-card yeti focusable" data-character="yeti" type="button"><i>1P</i><img class="character-portrait" src="%BASE_URL%images/characters/yeti.png" alt="" /><span class="character-card-copy"><strong>YETI</strong><small>Força bruta na neve</small></span></button>
+          <button class="character-card giru focusable" data-character="giru" type="button"><i>1P</i><img class="character-portrait" src="%BASE_URL%images/characters/giru-v2.png" alt="" /><span class="character-card-copy"><strong>GIRU</strong><small>Rainha da nevasca</small></span></button>
         </div>
         <button id="character-confirm-button" class="primary character-confirm focusable"><span>✕</span> CORRER COM NEVINHO</button>
       </section>

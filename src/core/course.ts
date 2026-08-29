@@ -107,7 +107,7 @@ export const COURSES: CourseDefinition[] = [
       hazard("log-a", "log", 470, 8, 3.5, 1.45), hazard("ice-b", "ice", 700, -6, 2, 4.6, true), hazard("ice-c", "ice", 780, 7, 1.7, 4),
       hazard("fence-b", "fence", 900, 1, 3.4, 1.6), hazard("rock-a", "rock", 1_020, -8, 2.2, 3.5), hazard("log-b", "log", 1_140, 6, 3.5, 1.5),
       hazard("snow-b", "snowball", 1_350, -2, 2.5, 3.4), hazard("ice-d", "ice", 1_490, 8, 2, 4.7), hazard("fence-c", "fence", 1_630, -7, 3.2, 1.55),
-      hazard("ice-e", "ice", 1_790, 1, 2.2, 5, true), hazard("log-c", "log", 1_940, -8, 3.6, 1.5), hazard("snow-c", "snowball", 2_130, 7, 2.4, 3.2),
+      hazard("ice-e", "ice", 1_790, 1, 2.2, 5, true), hazard("log-c", "log", 1_940, -8, 3.6, 1.5), hazard("snow-c", "snowball", 2_240, 7, 2.4, 3.2),
       hazard("rock-b", "rock", 2_300, -1, 2.3, 3.6), hazard("ice-f", "ice", 2_450, -8, 1.9, 4.4), hazard("fence-d", "fence", 2_590, 7, 3.3, 1.55),
       hazard("log-d", "log", 2_740, 0, 3.7, 1.55, true), hazard("snow-d", "snowball", 2_920, -7, 2.5, 3.4), hazard("ice-g", "ice", 3_040, 7, 2, 4.6),
       hazard("fence-e", "fence", 3_170, -7, 3.2, 1.55), hazard("rock-c", "rock", 3_420, 5, 2.3, 3.6), hazard("ice-h", "ice", 3_500, -6, 1.8, 4.2),
@@ -222,6 +222,13 @@ activate(activeCourse);
 
 export function rampLength(item: Ramp): number { return item.built ? 9.5 : 8.5; }
 export function rampHeight(item: Ramp): number { return item.built ? 2.35 : 1.8; }
+export function obstacleConflictsWithRamp(obstacle: Obstacle, ramp: Ramp): boolean {
+  const approachStart = ramp.s - rampLength(ramp) - 12;
+  const landingEnd = ramp.s + 24;
+  const insideJumpSection = obstacle.s + obstacle.radius >= approachStart && obstacle.s - obstacle.radius <= landingEnd;
+  const insideRampLane = Math.abs(obstacle.x - ramp.x) <= ramp.width / 2 + obstacle.radius + 1;
+  return insideJumpSection && insideRampLane;
+}
 export function rampSurfaceElevation(s: number, lateral: number): number {
   for (const item of RAMPS) {
     if (Math.abs(lateral - item.x) > item.width / 2 + .7) continue;
@@ -274,6 +281,7 @@ export function validateCourse(): string[] {
     if (!item.decorative && Math.abs(item.x) + item.radius > COURSE_HALF_WIDTH) issues.push(`${item.id}: obstáculo fora da pista.`);
     if (item.decorative && Math.abs(item.x) < COURSE_HALF_WIDTH + 2) issues.push(`${item.id}: decoração invade a pista.`);
     if (item.radius > COURSE_HALF_WIDTH - 3) issues.push(`${item.id}: obstáculo bloqueia toda a rota.`);
+    if (!item.decorative && RAMPS.some(ramp => obstacleConflictsWithRamp(item, ramp))) issues.push(`${item.id}: obstáculo invade a área segura de uma rampa.`);
   }
   for (const box of ITEM_BOXES) {
     if (Math.abs(box.x) + box.radius > COURSE_HALF_WIDTH - .2) issues.push(`${box.id}: caixa fora da pista.`);

@@ -30,6 +30,28 @@ const audio = new AudioManager();
 const view = new GameView(canvas);
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 
+function setupTitleSnow(): void {
+  const field = $("#title-snow");
+  for (let index = 0; index < 42; index += 1) {
+    const flake = document.createElement("i");
+    const direction = index % 2 === 0 ? 1 : -1;
+    const driftA = direction * (24 + (index * 17) % 92);
+    const driftB = -driftA * .48 + ((index * 11) % 31 - 15);
+    const depth = (index % 6) / 5;
+    flake.style.setProperty("--x", `${(index * 37 + index * index * 11) % 101}%`);
+    flake.style.setProperty("--size", `${3 + (index * 7) % 8}px`);
+    flake.style.setProperty("--duration", `${11 + (index * 13) % 10}s`);
+    flake.style.setProperty("--delay", `${-((index * 19) % 180) / 10}s`);
+    flake.style.setProperty("--drift-a", `${driftA}px`);
+    flake.style.setProperty("--drift-b", `${driftB}px`);
+    flake.style.setProperty("--spin", `${direction * (220 + (index * 23) % 190)}deg`);
+    flake.style.setProperty("--flake-opacity", `${(.22 + depth * .58).toFixed(2)}`);
+    field.append(flake);
+  }
+}
+
+setupTitleSnow();
+
 let state: RiderState = createRider();
 let previousRider: RiderState = { ...state };
 let rival: RivalState = createRival(YETI_PROFILE);
@@ -156,6 +178,8 @@ function formatTime(seconds: number): string {
 
 function showScreen(next: Screen): void {
   screen = next;
+  menu.dataset.screen = next;
+  canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "settings", "results"].includes(next));
   titleScreen.classList.toggle("hidden", next !== "title");
   campaignScreen.classList.toggle("hidden", next !== "campaign");
   characterScreen.classList.toggle("hidden", next !== "character");
@@ -365,10 +389,20 @@ function navigateMenu(direction: MenuAction): void {
   items.forEach(item => item.classList.remove("gamepad-focus"));
   items[next].focus({ preventScroll: false }); items[next].classList.add("gamepad-focus"); items[next].scrollIntoView({ block: "nearest" });
 }
+function ensureMenuMusic(): void {
+  if (screen === "playing" || screen === "paused") return;
+  audio.setMenuTrack();
+  document.documentElement.dataset.musicTrack = "menu";
+  audio.start();
+}
 function updateMenuInput(): void {
-  const direction = input.consumeAnyDirection(); if (direction) navigateMenu(direction);
-  if (input.consumeMenu("confirm")) (document.activeElement as HTMLElement | null)?.click();
-  if (input.consumeMenu("back")) {
+  const direction = input.consumeAnyDirection();
+  if (direction) { ensureMenuMusic(); navigateMenu(direction); }
+  const confirm = input.consumeMenu("confirm");
+  if (confirm) { ensureMenuMusic(); (document.activeElement as HTMLElement | null)?.click(); }
+  const back = input.consumeMenu("back");
+  if (back) {
+    ensureMenuMusic();
     if (screen === "settings") closeSettings();
     else if (screen === "character") openCampaign();
     else if (screen === "campaign") showScreen("title");
@@ -477,6 +511,12 @@ window.addEventListener("keydown", event => {
   if (event.key.toLowerCase() === "d" && event.altKey) view.setDebug(true);
 });
 
+// Navegadores podem bloquear áudio antes da primeira interação. A tentativa
+// acontece já na capa e estes gestos retomam o mesmo tema sem trocar de tela.
+window.addEventListener("pointerdown", ensureMenuMusic, { once: true, capture: true });
+window.addEventListener("touchstart", ensureMenuMusic, { once: true, capture: true });
+window.addEventListener("keydown", ensureMenuMusic, { once: true, capture: true });
+
 const savedQuality = safeStorageGet("neve-brava.quality.v1") as Quality | null;
 const savedMusicVolume = safeStorageGet("neve-brava.music-volume.v1");
 if (savedMusicVolume !== null && Number.isFinite(Number(savedMusicVolume))) {
@@ -490,4 +530,4 @@ if (savedQuality && ["high", "medium", "performance"].includes(savedQuality)) {
 const courseIssues = validateAllCourses();
 for (const [course, issues] of Object.entries(courseIssues)) if (issues.length) console.warn(`Validação da pista ${course}:`, issues);
 setActiveCourse(COURSES[0].id);
-renderTrackCards(); updateSelectedCourseCopy(); buildRaceMap(); showScreen("title"); requestAnimationFrame(frame);
+renderTrackCards(); updateSelectedCourseCopy(); buildRaceMap(); showScreen("title"); ensureMenuMusic(); requestAnimationFrame(frame);
