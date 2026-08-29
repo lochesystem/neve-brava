@@ -253,14 +253,13 @@ function land(state: RiderState, events: GameEvent[]): void {
     state.bestTrickPoints = comboResult.awarded;
     state.bestTrick = trick.name;
   }
-  const completedTrick = trick.spinTurns > 0 || trick.flipTurns > 0 || state.grabTime > .12;
-  const boost = grade === "clean" && completedTrick
-    ? clamp(.9 + (trick.spinTurns + trick.flipTurns) * .2 + state.grabTime * .28, .9, 2.15)
-    : 0;
-  if (grade === "sketchy") state.speed *= 0.82;
-  else if (boost > 0) {
+  const completedTrick = trick.spinTurns > 0 || trick.flipTurns > 0 || state.grabTime > .16;
+  const trickBoost = clamp(1.45 + (trick.spinTurns + trick.flipTurns) * .3 + state.grabTime * .35, 1.45, 2.8);
+  const boost = completedTrick ? trickBoost * (grade === "clean" ? 1 : .68) : 0;
+  if (grade === "sketchy") state.speed *= boost > 0 ? .9 : .82;
+  if (boost > 0) {
     state.turboTime = Math.max(state.turboTime, boost);
-    state.speed = Math.min(54, state.speed + 5.5 + boost * 1.2);
+    state.speed = Math.min(56, state.speed + (grade === "clean" ? 6.5 : 3.5) + boost * 1.35);
   } else state.speed = Math.min(45, state.speed + 2.4);
   events.push({ type: "LAND", grade, label: trick.name, points: comboResult.awarded, boost });
 }

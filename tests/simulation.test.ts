@@ -47,6 +47,21 @@ describe("simulação da prancha", () => {
     expect(rider.turboTime).toBeGreaterThan(0);
   });
 
+  it("entrega nitro após manobra válida mesmo em pouso imperfeito sem queda", () => {
+    const rider = createRider();
+    rider.s = 64;
+    rider.grounded = false;
+    rider.y = courseHeight(rider.s) + 0.48;
+    rider.verticalSpeed = -4;
+    rider.spin = Math.PI * 2 + 0.5;
+    const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
+    const landing = events.find(event => event.type === "LAND");
+    expect(landing?.type === "LAND" && landing.grade).toBe("sketchy");
+    expect(landing?.type === "LAND" && landing.boost).toBeGreaterThan(.9);
+    expect(rider.turboTime).toBeGreaterThan(.9);
+    expect(events.some(event => event.type === "CRASH")).toBe(false);
+  });
+
   it("transforma pouso perdido em capotamento com impulso residual", () => {
     const rider = createRider();
     rider.s = 70;
