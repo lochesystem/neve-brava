@@ -482,6 +482,8 @@ export class GameView {
   private snowfall: THREE.Points | null = null;
   private snowfallPositions: Float32Array | null = null;
   private skyDome: THREE.Mesh | null = null;
+  private skyClouds = new THREE.Group();
+  private skyMountains = new THREE.Group();
   private characterModels = new Map<CharacterId, THREE.Group>();
   private racerCharacters: { player: CharacterId; first: CharacterId; second: CharacterId } = { player: "snowman", first: "yeti", second: "guy" };
   private selectedCharacter: CharacterId = "snowman";
@@ -770,6 +772,7 @@ export class GameView {
     if (leftArm) leftArm.rotation.x = armSwing + (state.grabTime > 0 ? -1.3 : 0);
     if (rightArm) rightArm.rotation.x = -armSwing + (state.grabTime > 0 ? -1.3 : 0);
     this.updateCamera(state, dt);
+    this.updateSky(dt);
     this.updateParticles(dt);
     this.updateSnowfall(state, dt);
     this.updatePickupVisuals(state);
@@ -888,16 +891,91 @@ export class GameView {
       depthTest: false,
       fog: false,
       uniforms: {
-        topColor: { value: new THREE.Color(0x4d79ad) },
-        horizonColor: { value: new THREE.Color(0xc9dce5) },
+        topColor: { value: new THREE.Color(0x315d94) },
+        middleColor: { value: new THREE.Color(0x78afd0) },
+        horizonColor: { value: new THREE.Color(0xd9e7e8) },
         glowColor: { value: new THREE.Color(0xffe8b5) },
       },
       vertexShader: `varying vec3 vLocal;void main(){vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader: `varying vec3 vLocal;uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 glowColor;void main(){vec3 d=normalize(vLocal);float h=smoothstep(-0.12,0.72,d.y);float glow=pow(max(0.0,dot(d,normalize(vec3(-0.62,0.14,-0.48)))),22.0);vec3 color=mix(horizonColor,topColor,h)+glowColor*glow*0.32;gl_FragColor=vec4(color,1.0);}`,
+      fragmentShader: `varying vec3 vLocal;uniform vec3 topColor;uniform vec3 middleColor;uniform vec3 horizonColor;uniform vec3 glowColor;void main(){vec3 d=normalize(vLocal);float low=smoothstep(-0.1,0.28,d.y);float high=smoothstep(0.18,0.82,d.y);float glow=pow(max(0.0,dot(d,normalize(vec3(-0.62,0.14,-0.48)))),22.0);vec3 color=mix(horizonColor,middleColor,low);color=mix(color,topColor,high);color+=glowColor*glow*0.3;gl_FragColor=vec4(color,1.0);}`,
     });
     this.skyDome = new THREE.Mesh(geometry, material);
     this.skyDome.renderOrder = -1_000;
-    this.scene.add(this.skyDome);
+    this.createSkyMountains();
+    this.createSkyClouds();
+    this.scene.add(this.skyDome, this.skyMountains, this.skyClouds);
+  }
+
+  private createSkyMountains(): void {
+    const peakGeometry = new THREE.ConeGeometry(1, 1, 4, 1, false);
+    const layers = [
+      { radius: 300, count: 22, color: 0x6e8daa, opacity: .52, height: 78, width: 34 },
+      { radius: 235, count: 18, color: 0x829fb6, opacity: .68, height: 58, width: 27 },
+    ];
+    for (const [layerIndex, layer] of layers.entries()) {
+      const mountainMaterial = new THREE.MeshBasicMaterial({ color: layer.color, transparent: true, opacity: layer.opacity, depthWrite: false, fog: false });
+      for (let index = 0; index < layer.count; index += 1) {
+        const angle = index / layer.count * Math.PI * 2 + layerIndex * .13;
+        const variation = .72 + ((index * 7 + layerIndex * 3) % 11) / 18;
+        const peak = new THREE.Mesh(peakGeometry, mountainMaterial);
+        peak.scale.set(layer.width * variation, layer.height * variation, layer.width * variation * .72);
+        peak.position.set(Math.cos(angle) * layer.radius, layer.height * variation * .3 - 34, Math.sin(angle) * layer.radius);
+        peak.rotation.y = -angle + Math.PI * .25;
+        peak.renderOrder = -700 + layerIndex;
+        this.skyMountains.add(peak);
+      }
+    }
+  }
+
+  private createSkyClouds(): void {
+    const puffGeometry = new THREE.IcosahedronGeometry(1, 1);
+    const outlineMaterial = new THREE.MeshBasicMaterial({ color: 0x526b84, side: THREE.BackSide, transparent: true, opacity: .72, depthWrite: false, fog: false });
+    const lightMaterial = toon(0xf8fbf2, { transparent: true, opacity: .96, depthWrite: false, fog: false });
+    const shadeMaterial = toon(0xb7ccdb, { transparent: true, opacity: .95, depthWrite: false, fog: false });
+    for (let index = 0; index < 16; index += 1) {
+      const cloud = new THREE.Group();
+      const puffCount = 4 + index % 3;
+      for (let puff = 0; puff < puffCount; puff += 1) {
+        const shape = new THREE.Group();
+        const size = 5.8 + ((index * 5 + puff * 3) % 7) * .72;
+        const scale = new THREE.Vector3(size * (1.18 + puff % 2 * .25), size * (.68 + (puff + 1) % 3 * .12), size);
+        const outline = new THREE.Mesh(puffGeometry, outlineMaterial);
+        outline.scale.copy(scale).multiplyScalar(1.055);
+        const fill = new THREE.Mesh(puffGeometry, puff === 0 ? shadeMaterial : lightMaterial);
+        fill.scale.copy(scale);
+        shape.position.set((puff - (puffCount - 1) / 2) * 7.2, puff === 0 ? -2.4 : Math.sin(puff * 1.7) * 2.8, (puff % 2 - .5) * 3.5);
+        shape.add(outline, fill);
+        cloud.add(shape);
+      }
+      cloud.userData.angle = index / 16 * Math.PI * 2 + .22;
+      cloud.userData.radius = 145 + index % 4 * 31;
+      cloud.userData.height = 38 + index % 5 * 9;
+      cloud.userData.speed = .0045 + index % 3 * .0018;
+      cloud.userData.phase = index * 1.73;
+      cloud.scale.setScalar(.72 + index % 4 * .11);
+      this.skyClouds.add(cloud);
+    }
+    this.updateSky(0);
+  }
+
+  private updateSky(dt: number): void {
+    this.skyDome?.position.copy(this.camera.position);
+    this.skyMountains.position.copy(this.camera.position);
+    this.skyMountains.position.y -= 8;
+    this.skyClouds.position.copy(this.camera.position);
+    const cloudLimit = this.quality === "high" ? 16 : this.quality === "medium" ? 12 : 7;
+    this.skyClouds.children.forEach((cloud, index) => {
+      cloud.visible = index < cloudLimit;
+      cloud.userData.angle += cloud.userData.speed * dt;
+      const angle = cloud.userData.angle as number;
+      const radius = cloud.userData.radius as number;
+      const height = cloud.userData.height as number;
+      const phase = cloud.userData.phase as number;
+      cloud.position.set(Math.cos(angle) * radius, height + Math.sin(this.elapsedVisual * .12 + phase) * 2.2, Math.sin(angle) * radius);
+      // Mantém o eixo longo da nuvem tangente ao horizonte. Sem esse quarto
+      // de volta, os puffs se empilham em profundidade e parecem uma pedra.
+      cloud.rotation.y = -angle + Math.PI * .5;
+    });
   }
 
   private createWorld(): void {
@@ -1244,7 +1322,6 @@ export class GameView {
     this.camera.lookAt(focus);
     this.camera.fov += (60 + speedFactor * 25 - this.camera.fov) * dampAlpha(4.8, dt);
     this.camera.updateProjectionMatrix();
-    this.skyDome?.position.copy(this.camera.position);
     this.sun.position.set(world.x - 65, state.y + 110, world.z + 35);
     this.sunTarget.position.set(world.x, state.y, world.z);
   }
