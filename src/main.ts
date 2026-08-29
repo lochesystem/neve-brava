@@ -30,6 +30,15 @@ const audio = new AudioManager();
 const view = new GameView(canvas);
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 
+if (input.touchEnabled) document.body.classList.add("mobile-mode");
+input.bindTouchControls($("#touch-controls"));
+
+async function requestLandscape(): Promise<void> {
+  const orientation = window.screen.orientation as ScreenOrientation & { lock?: (mode: "landscape") => Promise<void> };
+  if (!input.touchEnabled || !orientation.lock) return;
+  try { await orientation.lock("landscape"); } catch { /* O aviso visual mantém retrato bloqueado. */ }
+}
+
 function setupTitleSnow(): void {
   const field = $("#title-snow");
   for (let index = 0; index < 42; index += 1) {
@@ -178,6 +187,7 @@ function formatTime(seconds: number): string {
 
 function showScreen(next: Screen): void {
   screen = next;
+  document.body.dataset.screen = next;
   menu.dataset.screen = next;
   canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "settings", "results"].includes(next));
   titleScreen.classList.toggle("hidden", next !== "title");
@@ -188,6 +198,9 @@ function showScreen(next: Screen): void {
   settingsScreen.classList.toggle("hidden", next !== "settings");
   menu.classList.toggle("hidden", next === "playing");
   hud.classList.toggle("hidden", !["playing", "paused"].includes(next));
+  const activeScreen = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen]
+    .find(element => !element.classList.contains("hidden"));
+  if (activeScreen) activeScreen.scrollTop = 0;
   window.setTimeout(focusFirst, 30);
 }
 
@@ -215,7 +228,7 @@ function updateCharacterSelection(): void {
 }
 
 function openCharacterSelect(): void {
-  if (!input.compatible && !input.usingDevFallback) return;
+  if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
   state = createRider(); previousRider = { ...state };
@@ -230,7 +243,8 @@ function openCharacterSelect(): void {
 }
 
 function startRun(): void {
-  if (!input.compatible && !input.usingDevFallback) return;
+  if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
+  void requestLandscape();
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
   audio.setCourseTrack(course.order);
@@ -361,16 +375,17 @@ function updateHud(force = false): void {
 }
 
 function updateControllerStatus(): void {
-  const available = input.compatible || input.usingDevFallback;
+  const available = input.compatible || input.usingDevFallback || input.touchEnabled;
   controllerCard.classList.toggle("connected", available);
   startButton.disabled = !available;
-  controllerName.textContent = input.compatible ? input.gamepadName : input.usingDevFallback
-    ? "Fallback de teclado habilitado para desenvolvimento"
+  controllerName.textContent = input.compatible ? input.gamepadName : input.touchEnabled
+    ? "Controles touch prontos · jogue na horizontal"
+    : input.usingDevFallback ? "Fallback de teclado habilitado para desenvolvimento"
     : input.connected ? `Controle incompatível: ${input.gamepadName}` : "Conecte o DualSense e pressione um botão";
   $("#dev-badge").classList.toggle("hidden", !input.usingDevFallback || screen !== "playing");
   $("#dev-hint").classList.toggle("hidden", input.usingDevFallback);
   if (screen === "playing" && !available) pause(true);
-  if (screen === "paused" && disconnectedPause && input.compatible) ($("#resume-button") as HTMLButtonElement).disabled = false;
+  if (screen === "paused" && disconnectedPause && (input.compatible || input.touchEnabled)) ($("#resume-button") as HTMLButtonElement).disabled = false;
 }
 
 function focusables(): HTMLElement[] {

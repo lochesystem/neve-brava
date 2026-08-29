@@ -13,6 +13,7 @@
 * { box-sizing: border-box; }
 
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #6aa5c2; }
+body.mobile-mode { touch-action: none; user-select: none; -webkit-user-select: none; }
 
 button, input { font: inherit; }
 
@@ -446,6 +447,157 @@ button span { margin-right: 8px; }
 .toast.coin { background: #d88025; }.toast.wind { background: #427ca2; }
 .countdown { position: absolute; inset: 0; display: grid; place-items: center; color: var(--yellow); -webkit-text-stroke: 3px var(--ink); text-shadow: 7px 8px 0 var(--ink); font: italic 900 min(28vw,220px) "Barlow Condensed"; }
 .dev-badge { position: absolute; right: 20px; bottom: 78px; padding: 5px 9px; background: #a43e4c; color: white; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+
+.touch-controls,.orientation-lock { display: none; }
+
+.mobile-mode[data-screen="playing"] .touch-controls { display: block; }
+.touch-controls { position: absolute; inset: 0; z-index: 12; pointer-events: none; }
+.touch-controls button,.touch-stick { pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.touch-actions {
+  position: absolute;
+  right: max(12px,env(safe-area-inset-right));
+  bottom: max(10px,env(safe-area-inset-bottom));
+  width: 210px;
+  height: 142px;
+}
+.touch-button,.touch-pause {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: rgba(255,255,255,.9);
+  background: rgba(27,43,61,.38);
+  border: 1.5px solid rgba(255,255,255,.55);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px rgba(37,51,72,.2),0 3px 10px rgba(15,31,47,.2);
+  backdrop-filter: blur(4px);
+  opacity: .68;
+}
+.touch-button span { margin: 0; font: 900 23px/1 "Barlow Condensed",sans-serif; }
+.touch-button small { font: 900 7px/1 "Barlow Condensed",sans-serif; letter-spacing: .08em; }
+.touch-button.active,.touch-pause.active { opacity: .95; background: rgba(255,114,94,.64); transform: scale(.92); }
+.touch-jump { left: 67px; top: 30px; width: 70px; height: 70px; border-color: rgba(255,218,113,.9); }
+.touch-spin-left { left: 0; top: 48px; width: 56px; height: 56px; }
+.touch-spin-right { right: 0; top: 48px; width: 56px; height: 56px; }
+.touch-flip { left: 33px; bottom: 0; width: 48px; height: 48px; }
+.touch-item { right: 33px; bottom: 0; width: 48px; height: 48px; }
+.touch-pause { top: max(8px,env(safe-area-inset-top)); right: max(102px,calc(env(safe-area-inset-right) + 94px)); width: 32px; height: 32px; font: 900 14px sans-serif; }
+.touch-pause.active { transform: scale(.92); }
+.touch-stick {
+  --stick-x: 0px;
+  --stick-y: 0px;
+  position: absolute;
+  left: max(16px,env(safe-area-inset-left));
+  bottom: max(13px,env(safe-area-inset-bottom));
+  width: 126px;
+  height: 126px;
+  border-radius: 50%;
+  background: rgba(28,49,66,.16);
+  border: 1.5px solid rgba(255,255,255,.48);
+  box-shadow: inset 0 0 0 12px rgba(37,51,72,.08),0 4px 14px rgba(15,31,47,.15);
+  backdrop-filter: blur(3px);
+  opacity: .64;
+}
+.touch-stick.active { opacity: .9; }
+.touch-stick-ring { position: absolute; inset: 20px; border: 1px dashed rgba(255,255,255,.55); border-radius: 50%; }
+.touch-stick-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; transform: translate(var(--stick-x),var(--stick-y)); background: rgba(37,51,72,.62); border: 2px solid rgba(255,255,255,.72); box-shadow: 0 4px 10px rgba(20,36,53,.28); }
+.touch-stick small { position: absolute; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,.72); font: 900 7px "Barlow Condensed",sans-serif; letter-spacing: .12em; }
+.touch-stick-up { top: 5px; }.touch-stick-down { bottom: 5px; }
+
+.orientation-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: 24px;
+  place-content: center;
+  text-align: center;
+  color: var(--ink);
+  background: radial-gradient(circle at 50% 30%,#fff 0,#edf8fb 48%,#d1eaf2 100%);
+}
+.orientation-lock h2 { margin: 18px 0 5px; font: italic 900 42px/.9 "Barlow Condensed",sans-serif; text-transform: uppercase; }
+.orientation-lock p { max-width: 290px; margin: 0 auto; font-weight: 800; }
+.orientation-phone { position: relative; width: 58px; height: 94px; margin: auto; border: 5px solid var(--ink); border-radius: 11px; animation: turn-phone 1.8s ease-in-out infinite; }
+.orientation-phone i { position: absolute; left: 50%; bottom: 5px; width: 8px; height: 8px; transform: translateX(-50%); border: 2px solid var(--ink); border-radius: 50%; }
+@keyframes turn-phone { 0%,22% { transform: rotate(0); } 60%,100% { transform: rotate(90deg); } }
+
+@media (orientation: portrait) {
+  .mobile-mode .orientation-lock { display: grid; }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .mobile-mode .hud-top { padding: max(7px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) 0 max(9px,env(safe-area-inset-left)); }
+  .mobile-mode .paper-chip { min-width: 0; padding: 4px 8px; border-width: 1.5px; box-shadow: 2px 2px 0 rgba(37,51,72,.38); }
+  .mobile-mode .paper-chip small { font-size: 7px; }
+  .mobile-mode .paper-chip b { font-size: 14px; }
+  .mobile-mode .paper-chip.speed b { font-size: 23px; }
+  .mobile-mode .paper-chip.speed span { font-size: 7px; }
+  .mobile-mode .paper-chip.section { max-width: 148px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .mobile-mode .hud-bottom { display: none; }
+  .mobile-mode .item-system { left: 50%; bottom: max(7px,env(safe-area-inset-bottom)); gap: 4px; transform: translateX(-50%) scale(.78); transform-origin: bottom center; }
+  .mobile-mode .credits-block,.mobile-mode .item-block { min-height: 38px; padding: 4px 7px; border-width: 1.5px; box-shadow: 2px 2px 0 rgba(37,51,72,.4); }
+  .mobile-mode .credits-block small,.mobile-mode .item-block small { display: none; }
+  .mobile-mode .item-block { min-width: 116px; }
+  .mobile-mode .course-minimap { top: 54px; right: max(7px,env(safe-area-inset-right)); width: 78px; height: 43vh; padding: 5px; border-width: 1.5px; box-shadow: 3px 3px 0 rgba(37,51,72,.4); }
+  .mobile-mode .course-minimap header small { display: none; }
+  .mobile-mode .course-minimap header b { max-width: 54px; font-size: 9px; }
+  .mobile-mode .course-minimap header strong { font-size: 15px; }
+  .mobile-mode #course-map { height: calc(100% - 28px); }
+  .mobile-mode .course-minimap footer { display: none; }
+  .mobile-mode .toast { top: 20%; padding: 5px 12px; font-size: 19px; }
+  .mobile-mode .countdown { font-size: min(24vw,128px); }
+  .mobile-mode .dev-badge { display: none !important; }
+
+  .mobile-mode .title-layout { grid-template-columns: 1fr .9fr; gap: 8px; min-height: 100%; padding: 8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); }
+  .mobile-mode .title-brand { min-height: 0; height: calc(100vh - 16px); }
+  .mobile-mode .title-hero { display: block; height: 84%; width: 100%; bottom: -3%; object-fit: contain; object-position: left bottom; }
+  .mobile-mode .title-brand-copy { left: 3%; top: 5%; }
+  .mobile-mode .title-brand h1 { font-size: clamp(54px,11vh,76px); }
+  .mobile-mode .title-brand .tagline,.mobile-mode .title-brand .eyebrow,.mobile-mode .title-brand .mountain-mark { display: none; }
+  .mobile-mode .title-panel { padding: 12px 15px; border-width: 2px; box-shadow: 5px 6px 0 rgba(37,51,72,.55); }
+  .mobile-mode .title-panel h2 { margin: 2px 0 4px; font-size: clamp(31px,9vh,43px); }
+  .mobile-mode .title-panel > p:not(.panel-kicker):not(.dev-hint) { font-size: 10px; }
+  .mobile-mode .controller-card { margin: 7px 0; padding: 7px 9px; }
+  .mobile-mode .controller-card small { display: none; }
+  .mobile-mode .controller-card b { font-size: 10px; }
+  .mobile-mode .menu-actions { gap: 5px; }
+  .mobile-mode button { min-height: 34px; padding: 7px 11px; font-size: 11px; }
+  .mobile-mode .dev-hint { display: none; }
+
+  .mobile-mode .campaign-screen { width: calc(100vw - 20px); height: calc(100vh - 14px); padding: 10px; overflow: hidden; }
+  .mobile-mode .campaign-head { display: flex; margin-bottom: 6px; }
+  .mobile-mode .campaign-head h2 { font-size: 28px; }
+  .mobile-mode .campaign-head p:not(.eyebrow) { display: none; }
+  .mobile-mode .track-grid { grid-template-columns: repeat(4,1fr); gap: 6px; margin: 5px 0; }
+  .mobile-mode .track-card { min-height: 168px; padding: 7px; }
+  .mobile-mode .track-card h3 { font-size: 20px; }
+  .mobile-mode .track-preview { height: 76px; }
+  .mobile-mode .track-card p { display: none; }
+  .mobile-mode .campaign-footer { justify-content: center; margin-top: 5px; padding-top: 5px; }
+  .mobile-mode .campaign-footer > div { display: none; }
+  .mobile-mode .campaign-footer button { width: min(320px,70vw); }
+
+  .mobile-mode .character-screen { width: calc(100vw - 20px); height: calc(100vh - 12px); }
+  .mobile-mode .character-head { grid-template-columns: auto 1fr auto; gap: 6px; }
+  .mobile-mode .character-head > div:nth-child(2) { padding: 5px 10px; }
+  .mobile-mode .character-head h2 { font-size: 29px; }
+  .mobile-mode .character-head p:not(.eyebrow) { font-size: 9px; }
+  .mobile-mode .player-flag { display: flex; padding: 5px 8px; }
+  .mobile-mode .character-roster { top: 66px; bottom: 48px; width: 100%; grid-template-columns: repeat(4,1fr); grid-template-rows: 1fr; gap: 6px; }
+  .mobile-mode .character-card { min-height: 0; }
+  .mobile-mode .character-card-copy { min-height: 43px; padding: 4px 7px; }
+  .mobile-mode .character-card strong { font-size: 18px; }
+  .mobile-mode .character-card small { display: none; }
+  .mobile-mode .character-confirm { bottom: 1px; min-width: 280px; }
+
+  .mobile-mode .modal,.mobile-mode .results { max-height: calc(100vh - 12px); overflow: auto; padding: 14px; }
+  .mobile-mode .modal h2,.mobile-mode .results h2 { font-size: 31px; }
+  .mobile-mode .result-grid { grid-template-columns: repeat(4,1fr); gap: 5px; margin: 7px 0; }
+  .mobile-mode .result-grid div { min-height: 48px; }
+  .mobile-mode .result-grid b { font-size: 17px; }
+  .mobile-mode .setting-row { align-items: center; flex-direction: row; padding: 6px 0; }
+  .mobile-mode .control-map { grid-template-columns: repeat(5,1fr); padding: 7px 0; gap: 4px; }
+  .mobile-mode .control-map span { font-size: 9px; }
+}
 
 @media (max-width: 680px) {
   .title-layout { grid-template-columns: 1fr; gap: 8px; min-height: calc(100vh - 18px); align-content: center; }

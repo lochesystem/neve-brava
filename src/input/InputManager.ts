@@ -26,6 +26,23 @@ const DEFAULT_SETTINGS: InputSettings = {
   invertY: false,
 };
 
+type TouchState = {
+  steer: number;
+  tuck: number;
+  brake: number;
+  jumpHeld: boolean;
+  jumpPressed: boolean;
+  jumpReleased: boolean;
+  spinLeft: boolean;
+  spinRight: boolean;
+  flipHeld: boolean;
+  itemPressed: boolean;
+};
+
+export function isTouchDevice(maxTouchPoints: number, coarsePointer: boolean, forced = false): boolean {
+  return forced || maxTouchPoints > 0 || coarsePointer;
+}
+
 export class InputManager {
   settings: InputSettings = { ...DEFAULT_SETTINGS };
   private keys = new Set<string>();
@@ -37,6 +54,12 @@ export class InputManager {
   private axisLatch = { x: 0, y: 0 };
   private lastPulseAt = 0;
   private devFallback = new URLSearchParams(window.location.search).has("dev");
+  private touchState: TouchState = this.emptyTouchState();
+  readonly touchEnabled = isTouchDevice(
+    navigator.maxTouchPoints ?? 0,
+    window.matchMedia?.("(pointer: coarse)").matches ?? false,
+    new URLSearchParams(window.location.search).has("mobile"),
+  );
 
   constructor() {
     window.addEventListener("keydown", event => {
@@ -54,6 +77,72 @@ export class InputManager {
     window.addEventListener("blur", clear);
     document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
     window.addEventListener("gamepaddisconnected", clear);
+  }
+
+  bindTouchControls(root: HTMLElement): void {
+    if (!this.touchEnabled) return;
+    const stick = root.querySelector<HTMLElement>("[data-touch-stick]");
+    if (stick) {
+      const updateStick = (event: PointerEvent) => {
+        const bounds = stick.getBoundingClientRect();
+        const radius = Math.max(1, Math.min(bounds.width, bounds.height) * .36);
+        const x = clamp((event.clientX - (bounds.left + bounds.width / 2)) / radius, -1, 1);
+        const y = clamp((event.clientY - (bounds.top + bounds.height / 2)) / radius, -1, 1);
+        const length = Math.hypot(x, y);
+        const normalizedX = length > 1 ? x / length : x;
+        const normalizedY = length > 1 ? y / length : y;
+        this.touchState.steer = Math.abs(normalizedX) < .08 ? 0 : normalizedX;
+        this.touchState.tuck = clamp(-normalizedY, 0, 1);
+        this.touchState.brake = clamp(normalizedY, 0, 1);
+        stick.style.setProperty("--stick-x", `${normalizedX * radius}px`);
+        stick.style.setProperty("--stick-y", `${normalizedY * radius}px`);
+      };
+      const releaseStick = (event: PointerEvent) => {
+        if (stick.hasPointerCapture(event.pointerId)) stick.releasePointerCapture(event.pointerId);
+        this.touchState.steer = 0;
+        this.touchState.tuck = 0;
+        this.touchState.brake = 0;
+        stick.style.setProperty("--stick-x", "0px");
+        stick.style.setProperty("--stick-y", "0px");
+        stick.classList.remove("active");
+      };
+      stick.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        stick.setPointerCapture(event.pointerId);
+        stick.classList.add("active");
+        updateStick(event);
+      });
+      stick.addEventListener("pointermove", event => {
+        if (stick.hasPointerCapture(event.pointerId)) updateStick(event);
+      });
+      stick.addEventListener("pointerup", releaseStick);
+      stick.addEventListener("pointercancel", releaseStick);
+    }
+
+    root.querySelectorAll<HTMLElement>("[data-touch-action]").forEach(button => {
+      const action = button.dataset.touchAction as "jump" | "spin-left" | "spin-right" | "flip" | "item" | "pause";
+      const release = (event: PointerEvent) => {
+        if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+        button.classList.remove("active");
+        if (action === "jump") { this.touchState.jumpHeld = false; this.touchState.jumpReleased = true; }
+        if (action === "spin-left") this.touchState.spinLeft = false;
+        if (action === "spin-right") this.touchState.spinRight = false;
+        if (action === "flip") this.touchState.flipHeld = false;
+      };
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        button.setPointerCapture(event.pointerId);
+        button.classList.add("active");
+        if (action === "jump") { this.touchState.jumpHeld = true; this.touchState.jumpPressed = true; }
+        if (action === "spin-left") this.touchState.spinLeft = true;
+        if (action === "spin-right") this.touchState.spinRight = true;
+        if (action === "flip") this.touchState.flipHeld = true;
+        if (action === "item") this.touchState.itemPressed = true;
+        if (action === "pause") this.menuQueue.add("pause");
+      });
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+    });
   }
 
   get connected(): boolean {
@@ -119,12 +208,23 @@ export class InputManager {
         recoverHeld: buttons.has(1),
         itemPressed: justPressed(11),
       };
+    } else if (this.touchEnabled) {
+      intent = {
+        ...EMPTY_INTENT,
+        ...this.touchState,
+        look: 0,
+        grabHeld: false,
+        recoverHeld: this.touchState.jumpHeld,
+      };
     } else if (this.devFallback) {
       intent = this.keyboardIntent();
     }
     this.previousButtons = buttons;
     this.pressedKeys.clear();
     this.releasedKeys.clear();
+    this.touchState.jumpPressed = false;
+    this.touchState.jumpReleased = false;
+    this.touchState.itemPressed = false;
     return intent;
   }
 
@@ -188,6 +288,15 @@ export class InputManager {
     this.previousButtons.clear();
     this.menuQueue.clear();
     this.axisLatch = { x: 0, y: 0 };
+    this.touchState = this.emptyTouchState();
+  }
+
+  private emptyTouchState(): TouchState {
+    return {
+      steer: 0, tuck: 0, brake: 0,
+      jumpHeld: false, jumpPressed: false, jumpReleased: false,
+      spinLeft: false, spinRight: false, flipHeld: false, itemPressed: false,
+    };
   }
 }
 
