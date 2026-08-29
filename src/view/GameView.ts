@@ -928,31 +928,41 @@ export class GameView {
   }
 
   private createSkyClouds(): void {
-    const puffGeometry = new THREE.IcosahedronGeometry(1, 1);
+    // Uma única silhueta extrudada evita as interseções internas que faziam a
+    // nuvem parecer várias bolas/rochas empilhadas.
+    const silhouette = new THREE.Shape();
+    silhouette.moveTo(-22, -4);
+    silhouette.bezierCurveTo(-25, -1, -24, 4, -19, 5);
+    silhouette.bezierCurveTo(-19, 10, -14, 13, -9, 10);
+    silhouette.bezierCurveTo(-6, 17, 2, 18, 7, 11);
+    silhouette.bezierCurveTo(12, 15, 18, 12, 17, 7);
+    silhouette.bezierCurveTo(24, 7, 26, 1, 21, -3);
+    silhouette.bezierCurveTo(13, -6, -13, -6, -22, -4);
+    const cloudGeometry = new THREE.ExtrudeGeometry(silhouette, {
+      depth: 5,
+      steps: 1,
+      curveSegments: 4,
+      bevelEnabled: true,
+      bevelSegments: 1,
+      bevelSize: 1.25,
+      bevelThickness: 1.25,
+    });
+    cloudGeometry.center();
     const outlineMaterial = new THREE.MeshBasicMaterial({ color: 0x526b84, side: THREE.BackSide, transparent: true, opacity: .72, depthWrite: false, fog: false });
     const lightMaterial = toon(0xf8fbf2, { transparent: true, opacity: .96, depthWrite: false, fog: false });
     const shadeMaterial = toon(0xb7ccdb, { transparent: true, opacity: .95, depthWrite: false, fog: false });
-    for (let index = 0; index < 16; index += 1) {
+    for (let index = 0; index < 32; index += 1) {
       const cloud = new THREE.Group();
-      const puffCount = 4 + index % 3;
-      for (let puff = 0; puff < puffCount; puff += 1) {
-        const shape = new THREE.Group();
-        const size = 5.8 + ((index * 5 + puff * 3) % 7) * .72;
-        const scale = new THREE.Vector3(size * (1.18 + puff % 2 * .25), size * (.68 + (puff + 1) % 3 * .12), size);
-        const outline = new THREE.Mesh(puffGeometry, outlineMaterial);
-        outline.scale.copy(scale).multiplyScalar(1.055);
-        const fill = new THREE.Mesh(puffGeometry, puff === 0 ? shadeMaterial : lightMaterial);
-        fill.scale.copy(scale);
-        shape.position.set((puff - (puffCount - 1) / 2) * 7.2, puff === 0 ? -2.4 : Math.sin(puff * 1.7) * 2.8, (puff % 2 - .5) * 3.5);
-        shape.add(outline, fill);
-        cloud.add(shape);
-      }
-      cloud.userData.angle = index / 16 * Math.PI * 2 + .22;
-      cloud.userData.radius = 145 + index % 4 * 31;
-      cloud.userData.height = 38 + index % 5 * 9;
+      const outline = new THREE.Mesh(cloudGeometry, outlineMaterial);
+      outline.scale.set(1.045, 1.075, 1.08);
+      const fill = new THREE.Mesh(cloudGeometry, [lightMaterial, shadeMaterial]);
+      cloud.add(outline, fill);
+      cloud.userData.angle = index / 32 * Math.PI * 2 + .12;
+      cloud.userData.radius = 155 + index % 4 * 30;
+      cloud.userData.height = 38 + index % 6 * 8;
       cloud.userData.speed = .0045 + index % 3 * .0018;
       cloud.userData.phase = index * 1.73;
-      cloud.scale.setScalar(.72 + index % 4 * .11);
+      cloud.scale.set(.54 + index % 4 * .07, .5 + index % 3 * .055, .68 + index % 2 * .08);
       this.skyClouds.add(cloud);
     }
     this.updateSky(0);
@@ -963,9 +973,8 @@ export class GameView {
     this.skyMountains.position.copy(this.camera.position);
     this.skyMountains.position.y -= 8;
     this.skyClouds.position.copy(this.camera.position);
-    const cloudLimit = this.quality === "high" ? 16 : this.quality === "medium" ? 12 : 7;
     this.skyClouds.children.forEach((cloud, index) => {
-      cloud.visible = index < cloudLimit;
+      cloud.visible = this.quality === "high" || (this.quality === "medium" ? index % 4 !== 3 : index % 3 === 0);
       cloud.userData.angle += cloud.userData.speed * dt;
       const angle = cloud.userData.angle as number;
       const radius = cloud.userData.radius as number;
