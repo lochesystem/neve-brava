@@ -460,7 +460,8 @@ export class GameView {
     new THREE.MeshBasicMaterial({ color: 0x73e0d0, transparent: true, opacity: .18, depthWrite: false, side: THREE.DoubleSide }),
   );
   private coinVisuals: Array<{ id: string; object: THREE.Group; baseY: number; heading: number; phase: number }> = [];
-  private boxVisuals: Array<{ id: string; object: THREE.Group; baseY: number; heading: number; phase: number }> = [];
+  private boxVisuals: Array<{ id: string; object: THREE.Group; shadow: THREE.Mesh; baseY: number; heading: number; phase: number }> = [];
+  private itemBoxModel: THREE.Group | null = null;
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
   private snowMaterial = toon(PALETTE.snow, { vertexColors: true });
@@ -516,6 +517,7 @@ export class GameView {
     this.loadRiderModel();
     this.loadRivalModel();
     this.loadGuyModel();
+    this.loadItemBoxModel();
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
@@ -602,6 +604,46 @@ export class GameView {
       undefined,
       error => console.warn("Não foi possível carregar o Guy rival; mantendo o placeholder.", error),
     );
+  }
+
+  private loadItemBoxModel(): void {
+    new GLTFLoader().load(
+      `${import.meta.env.BASE_URL}models/blind-box.glb`,
+      gltf => {
+        const model = gltf.scene;
+        const bounds = new THREE.Box3().setFromObject(model);
+        const center = bounds.getCenter(new THREE.Vector3());
+        const size = bounds.getSize(new THREE.Vector3());
+        const scale = 1.9 / Math.max(.001, size.x, size.y, size.z);
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+        model.traverse(object => {
+          if (!(object instanceof THREE.Mesh)) return;
+          object.castShadow = true;
+          object.receiveShadow = true;
+        });
+        const normalized = new THREE.Group();
+        normalized.add(model);
+        this.itemBoxModel = normalized;
+        this.refreshItemBoxModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar a caixa 3D; mantendo o placeholder.", error),
+    );
+  }
+
+  private createItemBoxVisual(item: ItemKind): THREE.Group {
+    const group = new THREE.Group();
+    group.add(this.itemBoxModel?.clone(true) ?? createItemBox(item));
+    return group;
+  }
+
+  private refreshItemBoxModels(): void {
+    if (!this.itemBoxModel) return;
+    for (const pickup of this.boxVisuals) {
+      pickup.object.clear();
+      pickup.object.add(this.itemBoxModel.clone(true));
+    }
   }
 
   private registerCharacterModel(id: CharacterId, model: THREE.Group): void {
@@ -917,14 +959,23 @@ export class GameView {
     }
     for (let index = 0; index < ITEM_BOXES.length; index += 1) {
       const box = ITEM_BOXES[index];
-      const object = createItemBox(box.item);
+      const object = this.createItemBoxVisual(box.item);
       const world = courseWorldPoint(box.s, box.x);
-      const baseY = courseTerrainHeight(box.s, box.x) + .04;
+      const groundY = courseTerrainHeight(box.s, box.x);
+      const baseY = groundY + 1.05;
       const heading = courseFrame(box.s).heading;
       object.position.set(world.x, baseY, world.z);
       object.rotation.y = heading;
+      const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(.82, 18),
+        new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: .17, depthWrite: false }),
+      );
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.set(world.x, groundY + .04, world.z);
+      shadow.scale.set(1.15, .7, 1);
       this.world.add(object);
-      this.boxVisuals.push({ id: box.id, object, baseY, heading, phase: index * 2.1 });
+      this.world.add(shadow);
+      this.boxVisuals.push({ id: box.id, object, shadow, baseY, heading, phase: index * 2.1 });
     }
     this.createSceneryInstances();
     this.createCourseEdges();
@@ -950,9 +1001,15 @@ export class GameView {
       pickup.object.rotation.y = pickup.heading + this.elapsedVisual * 2.2;
     }
     for (const pickup of this.boxVisuals) {
-      pickup.object.visible = !state.collectedBoxes.includes(pickup.id);
-      pickup.object.position.y = pickup.baseY + (Math.sin(this.elapsedVisual * 2.4 + pickup.phase) + 1) * .08;
-      pickup.object.rotation.y = pickup.heading + Math.sin(this.elapsedVisual * 1.7 + pickup.phase) * .08;
+      const available = !state.collectedBoxes.includes(pickup.id);
+      pickup.object.visible = available;
+      pickup.shadow.visible = available;
+      const hover = Math.sin(this.elapsedVisual * 2.2 + pickup.phase);
+      pickup.object.position.y = pickup.baseY + hover * .22;
+      pickup.object.rotation.y = pickup.heading + this.elapsedVisual * 1.55 + pickup.phase * .17;
+      pickup.object.rotation.z = hover * .035;
+      pickup.shadow.scale.set(1.15 - hover * .08, .7 - hover * .045, 1);
+      (pickup.shadow.material as THREE.MeshBasicMaterial).opacity = .15 - hover * .025;
     }
   }
 
