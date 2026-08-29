@@ -30,6 +30,20 @@ type Particle = {
   maxLife: number;
 };
 
+type TrailSample = { s: number; x: number };
+
+type SnowTrail = {
+  geometry: THREE.BufferGeometry;
+  positions: Float32Array;
+  colors: Float32Array;
+  cursor: number;
+  count: number;
+  last: TrailSample | null;
+};
+
+const TRAIL_SEGMENTS = 360;
+const TRAIL_VERTICES_PER_SEGMENT = 30;
+
 const PALETTE = {
   ink: 0x253348,
   snow: 0xfff8e7,
@@ -479,6 +493,11 @@ export class GameView {
   private itemBoxModel: THREE.Group | null = null;
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
+  private snowTrails = new THREE.Group();
+  private riderTrail: SnowTrail;
+  private rivalTrail: SnowTrail;
+  private guyTrail: SnowTrail;
+  private giruTrail: SnowTrail;
   private snowMaterial = toon(PALETTE.snow, { vertexColors: true });
   private quality: Quality = "medium";
   private lookOffset = 0;
@@ -501,6 +520,10 @@ export class GameView {
   );
 
   constructor(private canvas: HTMLCanvasElement) {
+    this.riderTrail = this.createSnowTrail();
+    this.rivalTrail = this.createSnowTrail();
+    this.guyTrail = this.createSnowTrail();
+    this.giruTrail = this.createSnowTrail();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -533,7 +556,7 @@ export class GameView {
     this.giruShadow.scale.set(1.8, .66, 1);
     this.selectionRing.rotation.x = -Math.PI / 2;
     this.selectionRing.visible = false;
-    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.debugLines);
+    this.scene.add(this.snowTrails, this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
     this.loadGuyModel();
@@ -759,6 +782,7 @@ export class GameView {
     this.boxVisuals = [];
     this.snowfall = null;
     this.snowfallPositions = null;
+    this.resetSnowTrails();
     this.createWorld();
   }
 
@@ -817,6 +841,10 @@ export class GameView {
     this.updateParticles(dt);
     this.updateSnowfall(state, dt);
     this.updatePickupVisuals(state);
+    this.updateSnowTrail(this.riderTrail, state.s, state.x, state.grounded && state.recovering <= 0, state.speed, state.carve);
+    this.updateSnowTrail(this.rivalTrail, rivalState.s, rivalState.x, rivalState.grounded && rivalState.stun <= 0, rivalState.speed, rivalState.carve);
+    this.updateSnowTrail(this.guyTrail, guyState.s, guyState.x, guyState.grounded && guyState.stun <= 0, guyState.speed, guyState.carve);
+    this.updateSnowTrail(this.giruTrail, giruState.s, giruState.x, giruState.grounded && giruState.stun <= 0, giruState.speed, giruState.carve);
     this.riderShield.visible = state.shieldTime > 0;
     if (state.shieldTime > 0) {
       const pulse = 1 + Math.sin(this.elapsedVisual * 8) * .035;
@@ -851,6 +879,102 @@ export class GameView {
     this.updateOpponent(giruState, this.giru, this.giruVisual, this.giruShadow, dt);
     this.updateSelectionRing(state, rivalState, guyState, giruState);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private createSnowTrail(): SnowTrail {
+    const vertexCount = TRAIL_SEGMENTS * TRAIL_VERTICES_PER_SEGMENT;
+    const positions = new Float32Array(vertexCount * 3);
+    const colors = new Float32Array(vertexCount * 3);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setDrawRange(0, 0);
+    const material = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: .78,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -2,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 2;
+    this.snowTrails.add(mesh);
+    return { geometry, positions, colors, cursor: 0, count: 0, last: null };
+  }
+
+  private resetSnowTrails(): void {
+    for (const trail of [this.riderTrail, this.rivalTrail, this.guyTrail, this.giruTrail]) {
+      trail.cursor = 0;
+      trail.count = 0;
+      trail.last = null;
+      trail.geometry.setDrawRange(0, 0);
+    }
+  }
+
+  private updateSnowTrail(trail: SnowTrail, s: number, x: number, grounded: boolean, speed: number, carve: number): void {
+    if (!grounded || speed < 7 || s < .35 || s >= COURSE_LENGTH) {
+      trail.last = null;
+      return;
+    }
+    const current = { s, x };
+    if (!trail.last) {
+      trail.last = current;
+      return;
+    }
+    const distance = Math.hypot(current.s - trail.last.s, current.x - trail.last.x);
+    if (current.s <= trail.last.s || distance > 5) {
+      trail.last = current;
+      return;
+    }
+    if (distance < .9) return;
+
+    const halfGroove = .17 + Math.abs(carve) * .12 + clamp((speed - 15) / 55, 0, 1) * .035;
+    const ridgeHalf = .045;
+    const slot = trail.cursor * TRAIL_VERTICES_PER_SEGMENT;
+    let vertex = slot;
+    const compressed = new THREE.Color(0x9fb6c3);
+    const grooveWall = new THREE.Color(0x718b9d);
+    const ridge = new THREE.Color(0xf4f1df);
+    const point = (sample: TrailSample, lateral: number, lift: number): [number, number, number] => {
+      const world = courseWorldPoint(sample.s, sample.x + lateral);
+      return [world.x, courseTerrainHeight(sample.s, sample.x + lateral) + lift, world.z];
+    };
+    const writeVertex = (position: [number, number, number], color: THREE.Color): void => {
+      const offset = vertex * 3;
+      trail.positions[offset] = position[0];
+      trail.positions[offset + 1] = position[1];
+      trail.positions[offset + 2] = position[2];
+      trail.colors[offset] = color.r;
+      trail.colors[offset + 1] = color.g;
+      trail.colors[offset + 2] = color.b;
+      vertex += 1;
+    };
+    const writeQuad = (left: number, right: number, lift: number, color: THREE.Color): void => {
+      const a = point(trail.last!, left, lift);
+      const b = point(trail.last!, right, lift);
+      const c = point(current, left, lift);
+      const d = point(current, right, lift);
+      for (const position of [a, b, c, b, d, c] as Array<[number, number, number]>) writeVertex(position, color);
+    };
+
+    // O centro fica praticamente coplanar à neve: a cor fria lê como neve
+    // comprimida. As duas cristas mínimas simulam o pó empurrado pela lâmina.
+    writeQuad(-halfGroove, halfGroove, .006, compressed);
+    writeQuad(-halfGroove, -halfGroove + ridgeHalf * .65, .008, grooveWall);
+    writeQuad(halfGroove - ridgeHalf * .65, halfGroove, .008, grooveWall);
+    writeQuad(-halfGroove - ridgeHalf * 2, -halfGroove, .022, ridge);
+    writeQuad(halfGroove, halfGroove + ridgeHalf * 2, .022, ridge);
+
+    (trail.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    (trail.geometry.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+    trail.cursor = (trail.cursor + 1) % TRAIL_SEGMENTS;
+    trail.count = Math.min(TRAIL_SEGMENTS, trail.count + 1);
+    trail.geometry.setDrawRange(0, trail.count * TRAIL_VERTICES_PER_SEGMENT);
+    trail.last = current;
   }
 
   private updateSelectionRing(player: RiderState, first: RivalState, second: RivalState, third: RivalState): void {
