@@ -604,8 +604,9 @@ export class GameView {
           object.receiveShadow = true;
         });
         const orientedModel = new THREE.Group();
-        // Os personagens gerados pelo Tripo compartilham o mesmo eixo diagonal.
-        orientedModel.rotation.y = Math.PI * .625;
+        // O Guy tem alguns graus extras no eixo do arquivo. Compensa para que
+        // peito, cabeça e prancha apontem ao centro da pista no repouso.
+        orientedModel.rotation.y = Math.PI * .65;
         orientedModel.add(model);
         this.registerCharacterModel("guy", orientedModel);
       },
