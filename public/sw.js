@@ -1,4 +1,4 @@
-const CACHE_NAME = "snow-rush-shell-v2";
+const CACHE_NAME = "snow-rush-shell-v3";
 const CORE_ASSETS = [
   "./",
   "./manifest.webmanifest",
@@ -6,6 +6,7 @@ const CORE_ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
+  "./images/snow-rush-logo.png",
   "./images/snow-rush-hero.png"
 ];
 

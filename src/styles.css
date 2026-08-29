@@ -12,7 +12,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #6aa5c2; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #6aa5c2; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body.mobile-mode { touch-action: none; user-select: none; -webkit-user-select: none; }
 
 button, input { font: inherit; }
@@ -187,6 +187,7 @@ button, input { font: inherit; }
   user-select: none;
 }
 .title-brand-copy { position: absolute; z-index: 1; top: clamp(34px,8vh,92px); left: 12px; text-align: left; }
+.title-logo { display: none; width: 180px; height: auto; filter: drop-shadow(4px 5px 0 rgba(37,51,72,.95)); }
 .title-panel {
   position: relative;
   z-index: 2;
@@ -553,7 +554,8 @@ button span { margin-right: 8px; }
   .mobile-mode .title-brand { min-height: 0; height: calc(100vh - 16px); }
   .mobile-mode .title-hero { display: block; height: 84%; width: 100%; bottom: -3%; object-fit: contain; object-position: left bottom; }
   .mobile-mode .title-brand-copy { left: 3%; top: 5%; }
-  .mobile-mode .title-brand h1 { font-size: clamp(54px,11vh,76px); }
+  .mobile-mode .title-logo { display: block; width: clamp(104px,24vh,138px); }
+  .mobile-mode .title-brand h1 { display: none; }
   .mobile-mode .title-brand .tagline,.mobile-mode .title-brand .eyebrow,.mobile-mode .title-brand .mountain-mark { display: none; }
   .mobile-mode .title-panel { padding: 12px 15px; border-width: 2px; box-shadow: 5px 6px 0 rgba(37,51,72,.55); }
   .mobile-mode .title-panel h2 { margin: 2px 0 4px; font-size: clamp(31px,9vh,43px); }
@@ -566,11 +568,11 @@ button span { margin-right: 8px; }
   .mobile-mode .dev-hint { display: none; }
   .mobile-mode .install-hint { margin-top: 5px; padding: 4px 7px; font-size: 9px; }
 
-  .mobile-mode .campaign-screen { width: calc(100vw - 20px); height: calc(100vh - 14px); padding: 10px; overflow: hidden; }
+  .mobile-mode .campaign-screen { width: calc(100vw - 20px); height: calc(100vh - 14px); display: flex; flex-direction: column; padding: 10px; overflow: hidden; }
   .mobile-mode .campaign-head { display: flex; margin-bottom: 6px; }
   .mobile-mode .campaign-head h2 { font-size: 28px; }
   .mobile-mode .campaign-head p:not(.eyebrow) { display: none; }
-  .mobile-mode .track-grid { grid-template-columns: repeat(4,1fr); gap: 6px; margin: 5px 0; }
+  .mobile-mode .track-grid { flex: 1; min-height: 0; grid-template-columns: repeat(4,1fr); gap: 6px; margin: 5px 0; }
   .mobile-mode .track-card { min-height: 168px; padding: 7px; }
   .mobile-mode .track-card h3 { font-size: 20px; }
   .mobile-mode .track-preview { height: 76px; }
@@ -600,6 +602,43 @@ button span { margin-right: 8px; }
   .mobile-mode .setting-row { align-items: center; flex-direction: row; padding: 6px 0; }
   .mobile-mode .control-map { grid-template-columns: repeat(5,1fr); padding: 7px 0; gap: 4px; }
   .mobile-mode .control-map span { font-size: 9px; }
+}
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .mobile-mode .title-layout { grid-template-columns: 1.08fr .92fr; padding-top: 5px; padding-bottom: 5px; }
+  .mobile-mode .title-brand { height: calc(100vh - 10px); }
+  .mobile-mode .title-hero { height: 78%; }
+  .mobile-mode .title-logo { width: 102px; }
+  .mobile-mode .title-panel { padding: 9px 12px; }
+  .mobile-mode .title-panel h2 { font-size: 28px; }
+  .mobile-mode .title-panel > p:not(.panel-kicker):not(.dev-hint) { margin-bottom: 7px; font-size: 9px; }
+  .mobile-mode .controller-card { margin: 5px 0; padding: 5px 7px; }
+  .mobile-mode button { min-height: 30px; padding: 5px 9px; font-size: 10px; }
+
+  .mobile-mode .campaign-screen { padding: 7px 9px; }
+  .mobile-mode .campaign-head { height: 38px; margin-bottom: 2px; }
+  .mobile-mode .campaign-head .eyebrow { margin: 0; font-size: 8px; }
+  .mobile-mode .campaign-head h2 { font-size: 22px; line-height: .9; }
+  .mobile-mode .track-grid { gap: 4px; margin: 3px 0; }
+  .mobile-mode .track-card { min-height: 136px; padding: 5px; }
+  .mobile-mode .track-card-number { font-size: 8px; }
+  .mobile-mode .track-card h3 { margin-top: 4px; font-size: 16px; line-height: .92; }
+  .mobile-mode .track-card small { font-size: 8px; }
+  .mobile-mode .track-preview { height: clamp(53px,22vh,92px); }
+  .mobile-mode .campaign-footer { margin-top: 3px; padding-top: 3px; }
+
+  .mobile-mode .character-head { height: 55px; }
+  .mobile-mode .character-head > div:nth-child(2) { padding: 3px 8px; }
+  .mobile-mode .character-head .eyebrow { margin: 0; font-size: 8px; }
+  .mobile-mode .character-head h2 { font-size: 23px; line-height: .9; }
+  .mobile-mode .character-head p:not(.eyebrow) { font-size: 8px; }
+  .mobile-mode .player-flag { padding: 3px 6px; }
+  .mobile-mode .player-flag b { font-size: 18px; }
+  .mobile-mode .player-flag span { font-size: 9px; }
+  .mobile-mode .character-roster { top: 58px; bottom: 43px; }
+  .mobile-mode .character-card-copy { min-height: 36px; }
+  .mobile-mode .character-card strong { font-size: 15px; }
+  .mobile-mode .character-confirm { min-width: 250px; }
 }
 
 @media (max-width: 680px) {

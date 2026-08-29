@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 400">
+  <path d="m105 120 58-89 58 89Z" fill="#f8f2df"/>
+  <path d="m176 120 80-120 80 120Z" fill="#ffc94f"/>
+  <path d="m290 120 58-89 58 89Z" fill="#f8f2df"/>
+  <g transform="rotate(-4 256 245)" font-family="Impact,Arial Black,sans-serif" font-style="italic" font-weight="900" text-anchor="middle" stroke="#253348" stroke-width="14" stroke-linejoin="round" paint-order="stroke fill">
+    <text x="256" y="226" font-size="126" fill="#f8f2df">SNOW</text>
+    <text x="256" y="350" font-size="140" fill="#ffc94f">RUSH</text>
+  </g>
+</svg>

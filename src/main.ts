@@ -40,9 +40,17 @@ async function requestLandscape(): Promise<void> {
 }
 
 function requestMobileFullscreen(): void {
+  if (new URLSearchParams(window.location.search).has("layout-test")) return;
   if (!input.touchEnabled || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
   void document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
 }
+
+function requestMobileImmersiveMode(): void {
+  requestMobileFullscreen();
+  void requestLandscape();
+}
+
+if (input.touchEnabled) window.addEventListener("click", requestMobileImmersiveMode, { once: true, capture: true });
 
 function setupTitleSnow(): void {
   const field = $("#title-snow");
@@ -283,8 +291,7 @@ function openCharacterSelect(): void {
 
 function startRun(): void {
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
-  requestMobileFullscreen();
-  void requestLandscape();
+  requestMobileImmersiveMode();
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
   audio.setCourseTrack(course.order);
