@@ -213,9 +213,9 @@ button span { margin-right: 8px; }
 .character-head p { margin: 2px 0 0; font-weight: 900; }
 .player-flag { justify-self: end; padding: 9px 13px; color: white; background: var(--coral); border: 3px solid var(--ink); box-shadow: 5px 6px 0 var(--ink); transform: rotate(2deg); text-align: center; }
 .player-flag b,.player-flag span { display: block; font-family: "Barlow Condensed",sans-serif; }.player-flag b { color: var(--yellow); font-size: 28px; }.player-flag span { font-weight: 900; }
-.character-roster { position: absolute; left: 50%; right: auto; bottom: 80px; width: min(820px,100%); transform: translateX(-50%); display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+.character-roster { position: absolute; left: 50%; right: auto; bottom: 80px; width: min(1040px,100%); transform: translateX(-50%); display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
 .character-card { position: relative; min-height: 128px; padding: 14px 14px 12px 76px; text-align: left; background: rgba(248,242,223,.94); box-shadow: 6px 7px 0 var(--ink); }
-.character-card.guy { background: #cfece7; }.character-card.yeti { background: #e1d8f0; }.character-card.snowman { background: #ffe1b0; }
+.character-card.guy { background: #cfece7; }.character-card.yeti { background: #e1d8f0; }.character-card.snowman { background: #ffe1b0; }.character-card.giru { background: #d8c4ee; }
 .character-card > i { display: none; position: absolute; top: -37px; left: 50%; transform: translateX(-50%) rotate(-4deg); padding: 4px 11px; color: var(--yellow); background: var(--ink); border-radius: 4px 10px; font: italic 900 26px "Barlow Condensed"; }
 .character-card.selected > i { display: block; }
 .character-card.selected { border-color: var(--yellow); outline: 5px solid var(--ink); transform: translateY(-10px) rotate(-1deg); filter: brightness(1.06); }
@@ -303,6 +303,8 @@ button span { margin-right: 8px; }
 #course-map-rival path { fill: white; stroke: var(--ink); stroke-width: 1.5; }
 #course-map-guy circle { fill: #35aebe; stroke: var(--ink); stroke-width: 3; filter: drop-shadow(0 3px 0 rgba(37,51,72,.3)); }
 #course-map-guy path { fill: var(--yellow); stroke: var(--ink); stroke-width: 1.5; }
+#course-map-giru circle { fill: #7d4caf; stroke: var(--ink); stroke-width: 3; filter: drop-shadow(0 3px 0 rgba(37,51,72,.3)); }
+#course-map-giru path { fill: #ffd96a; stroke: var(--ink); stroke-width: 1.5; }
 .map-finish { fill: var(--ink); }
 .course-minimap footer { position: absolute; top: 57px; right: 7px; bottom: 8px; display: flex; flex-direction: column; align-items: end; justify-content: space-between; font: 900 8px "Barlow Condensed",sans-serif; letter-spacing: .12em; opacity: .62; }
 .toast { position: absolute; left: 50%; top: 26%; transform: translate(-50%,-50%) rotate(-2deg); padding: 8px 20px; color: white; background: var(--ink); font: italic 900 30px "Barlow Condensed"; opacity: 0; transition: opacity .15s, transform .15s; }

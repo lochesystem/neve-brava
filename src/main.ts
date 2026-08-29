@@ -6,7 +6,7 @@ import {
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
 import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
 import {
-  applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
+  applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
@@ -36,6 +36,8 @@ let rival: RivalState = createRival(YETI_PROFILE);
 let previousRival: RivalState = { ...rival };
 let guy: RivalState = createRival(GUY_PROFILE);
 let previousGuy: RivalState = { ...guy };
+let giru: RivalState = createRival(GIRU_PROFILE);
+let previousGiru: RivalState = { ...giru };
 let screen: Screen = "title";
 let settingsReturn: Screen = "title";
 let selectedCourseIndex = 0;
@@ -71,6 +73,7 @@ const mapShadow = document.querySelector<SVGPathElement>("#course-map-shadow")!;
 const mapMarker = document.querySelector<SVGGElement>("#course-map-marker")!;
 const mapRival = document.querySelector<SVGGElement>("#course-map-rival")!;
 const mapGuy = document.querySelector<SVGGElement>("#course-map-guy")!;
+const mapGiru = document.querySelector<SVGGElement>("#course-map-giru")!;
 const mapStart = document.querySelector<SVGCircleElement>(".map-start")!;
 const mapFinish = document.querySelector<SVGPathElement>(".map-finish")!;
 
@@ -141,8 +144,9 @@ function updateMapMarker(): void {
   mapMarker.setAttribute("transform", markerTransform(state.s, state.x, state.heading));
   mapRival.setAttribute("transform", markerTransform(rival.s, rival.x, rival.heading));
   mapGuy.setAttribute("transform", markerTransform(guy.s, guy.x, guy.heading));
-  const position = 1 + [rival, guy].filter(opponent => opponent.s > state.s + .35).length;
-  $("#race-position").innerHTML = `${position}º <i>/ 3</i>`;
+  mapGiru.setAttribute("transform", markerTransform(giru.s, giru.x, giru.heading));
+  const position = 1 + [rival, guy, giru].filter(opponent => opponent.s > state.s + .35).length;
+  $("#race-position").innerHTML = `${position}º <i>/ 4</i>`;
 }
 
 function formatTime(seconds: number): string {
@@ -190,7 +194,8 @@ function openCharacterSelect(): void {
   state = createRider(); previousRider = { ...state };
   rival = createOpponent("yeti", 3.1); previousRival = { ...rival };
   guy = createOpponent("guy", -3.15); previousGuy = { ...guy };
-  view.setRacerCharacters("snowman", "yeti", "guy");
+  giru = createOpponent("giru", 7.4); previousGiru = { ...giru };
+  view.setRacerCharacters("snowman", "yeti", "guy", "giru");
   view.setSelectionMode(true);
   $("#character-course").textContent = `${course.name} · ETAPA ${String(course.order).padStart(2, "0")}`;
   updateCharacterSelection();
@@ -211,7 +216,9 @@ function startRun(): void {
   previousRival = { ...rival };
   guy = createOpponent(opponents[1], -3.15);
   previousGuy = { ...guy };
-  view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1]);
+  giru = createOpponent(opponents[2], 7.4);
+  previousGiru = { ...giru };
+  view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   view.setSelectionMode(false);
   accumulator = 0;
   countdown = 3.35;
@@ -252,7 +259,7 @@ function finish(): void {
   const projectedTime = (opponent: RivalState) => opponent.finished
     ? opponent.finishTime
     : opponent.elapsed + (COURSE_LENGTH - opponent.s) / Math.max(20, opponent.speed);
-  const rivals = [rival, guy].map(opponent => ({ opponent, time: projectedTime(opponent) }));
+  const rivals = [rival, guy, giru].map(opponent => ({ opponent, time: projectedTime(opponent) }));
   const position = 1 + rivals.filter(entry => entry.time < state.elapsed).length;
   $("#result-position").textContent = `${position}º`;
   $("#result-rival").textContent = rivals.map(({ opponent, time }) => {
@@ -285,7 +292,7 @@ function handleEvent(event: GameEvent): void {
   if (event.type === "ITEM_USED") {
     input.pulse(event.item === "turbo" ? .7 : .35, .65, event.item === "turbo" ? 220 : 140);
     if (event.item === "wind") {
-      const target = [rival, guy]
+      const target = [rival, guy, giru]
         .filter(opponent => opponent.s >= state.s - 4 && opponent.s - state.s <= 100 && !opponent.finished)
         .sort((first, second) => Math.abs(first.s - state.s) - Math.abs(second.s - state.s))[0];
       if (target) { applyWindHit(target); showToast(`VENTANIA NO ${target.name}!`, "wind"); }
@@ -383,13 +390,19 @@ function frame(now: number): void {
         previousRider = { ...state }; const progressBeforeStep = state.s;
         previousRival = { ...rival };
         previousGuy = { ...guy };
+        previousGiru = { ...giru };
         for (const event of updateRider(state, stepIntent, fixedStep)) handleEvent(event);
         for (const event of updateRival(rival, state.s, state.x, fixedStep)) handleRivalEvent(event, rival);
         const leader = rival.s > state.s ? rival : state;
         for (const event of updateRival(guy, leader.s, leader.x, fixedStep)) handleRivalEvent(event, guy);
+        const frontRunner = guy.s > leader.s ? guy : leader;
+        for (const event of updateRival(giru, frontRunner.s, frontRunner.x, fixedStep)) handleRivalEvent(event, giru);
         if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
+        if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);
         resolveRivalContact(rival, guy);
+        resolveRivalContact(rival, giru);
+        resolveRivalContact(guy, giru);
         if (Math.abs(state.s - progressBeforeStep) > 5) previousRider = { ...state };
         accumulator -= fixedStep; firstStep = false;
       }
@@ -402,7 +415,8 @@ function frame(now: number): void {
   const renderState = screen === "playing" && countdown <= 0 ? interpolateRider(previousRider, state, accumulator / fixedStep) : state;
   const renderRival = screen === "playing" && countdown <= 0 ? interpolateRival(previousRival, rival, accumulator / fixedStep) : rival;
   const renderGuy = screen === "playing" && countdown <= 0 ? interpolateRival(previousGuy, guy, accumulator / fixedStep) : guy;
-  view.render(renderState, renderRival, renderGuy, lastIntentLook, dt); requestAnimationFrame(frame);
+  const renderGiru = screen === "playing" && countdown <= 0 ? interpolateRival(previousGiru, giru, accumulator / fixedStep) : giru;
+  view.render(renderState, renderRival, renderGuy, renderGiru, lastIntentLook, dt); requestAnimationFrame(frame);
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);

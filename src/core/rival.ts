@@ -66,10 +66,15 @@ export const SNOWMAN_PROFILE: RivalProfile = {
   id: "snowman", name: "NEVINHO", startX: 3.1, linePhase: 1.15, paceBias: 1.35, aggression: .82, rampAffinity: 1.12,
 };
 
+export const GIRU_PROFILE: RivalProfile = {
+  id: "giru", name: "GIRU", startX: 7.4, linePhase: 3.7, paceBias: 1.48, aggression: .94, rampAffinity: 1.3,
+};
+
 export const RIVAL_PROFILES: Record<CharacterId, RivalProfile> = {
   snowman: SNOWMAN_PROFILE,
   yeti: YETI_PROFILE,
   guy: GUY_PROFILE,
+  giru: GIRU_PROFILE,
 };
 
 export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {

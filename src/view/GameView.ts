@@ -49,6 +49,7 @@ const PLAYER_MODEL_Y_OFFSET: Record<CharacterId, number> = {
   snowman: -.07,
   yeti: -.34,
   guy: -.155,
+  giru: -.16,
 };
 
 function toon(color: number, options: Partial<THREE.MeshToonMaterialParameters> = {}): THREE.MeshToonMaterial {
@@ -451,6 +452,8 @@ export class GameView {
   private rivalVisual = createRiderModel();
   private guy = new THREE.Group();
   private guyVisual = createRiderModel();
+  private giru = new THREE.Group();
+  private giruVisual = createRiderModel();
   private contactShadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.82, 20),
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.24, depthWrite: false }),
@@ -460,6 +463,10 @@ export class GameView {
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
   );
   private guyShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.86, 20),
+    new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
+  );
+  private giruShadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.86, 20),
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
   );
@@ -485,7 +492,7 @@ export class GameView {
   private skyClouds = new THREE.Group();
   private skyMountains = new THREE.Group();
   private characterModels = new Map<CharacterId, THREE.Group>();
-  private racerCharacters: { player: CharacterId; first: CharacterId; second: CharacterId } = { player: "snowman", first: "yeti", second: "guy" };
+  private racerCharacters: { player: CharacterId; first: CharacterId; second: CharacterId; third: CharacterId } = { player: "snowman", first: "yeti", second: "guy", third: "giru" };
   private selectedCharacter: CharacterId = "snowman";
   private selectionMode = false;
   private selectionRing = new THREE.Mesh(
@@ -517,16 +524,20 @@ export class GameView {
     this.rider.add(this.riderShield);
     this.rival.add(this.rivalVisual);
     this.guy.add(this.guyVisual);
+    this.giru.add(this.giruVisual);
     this.rivalShadow.rotation.x = -Math.PI / 2;
     this.rivalShadow.scale.set(1.9, .7, 1);
     this.guyShadow.rotation.x = -Math.PI / 2;
     this.guyShadow.scale.set(1.8, .66, 1);
+    this.giruShadow.rotation.x = -Math.PI / 2;
+    this.giruShadow.scale.set(1.8, .66, 1);
     this.selectionRing.rotation.x = -Math.PI / 2;
     this.selectionRing.visible = false;
-    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.selectionRing, this.debugLines);
+    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
     this.loadGuyModel();
+    this.loadGiruModel();
     this.loadItemBoxModel();
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -617,6 +628,33 @@ export class GameView {
     );
   }
 
+  private loadGiruModel(): void {
+    new GLTFLoader().load(
+      `${import.meta.env.BASE_URL}models/giru.glb`,
+      gltf => {
+        const model = gltf.scene;
+        const bounds = new THREE.Box3().setFromObject(model);
+        const center = bounds.getCenter(new THREE.Vector3());
+        const height = Math.max(.001, bounds.max.y - bounds.min.y);
+        const scale = 2.5 / height;
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+        model.traverse(object => {
+          if (!(object instanceof THREE.Mesh)) return;
+          object.castShadow = true;
+          object.receiveShadow = true;
+        });
+        const orientedModel = new THREE.Group();
+        // Modelos gerados para a mesma pose usam o eixo diagonal da prancha.
+        orientedModel.rotation.y = Math.PI * .625;
+        orientedModel.add(model);
+        this.registerCharacterModel("giru", orientedModel);
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar a Giru; mantendo o placeholder.", error),
+    );
+  }
+
   private loadItemBoxModel(): void {
     new GLTFLoader().load(
       `${import.meta.env.BASE_URL}models/blind-box.glb`,
@@ -667,6 +705,7 @@ export class GameView {
       { visual: this.riderVisual, id: this.racerCharacters.player, player: true },
       { visual: this.rivalVisual, id: this.racerCharacters.first, player: false },
       { visual: this.guyVisual, id: this.racerCharacters.second, player: false },
+      { visual: this.giruVisual, id: this.racerCharacters.third, player: false },
     ];
     for (const slot of slots) {
       const template = this.characterModels.get(slot.id);
@@ -680,8 +719,8 @@ export class GameView {
     this.hips = this.characterModels.has(this.racerCharacters.player) ? null : this.riderVisual.getObjectByName("hips") as THREE.Group;
   }
 
-  setRacerCharacters(player: CharacterId, first: CharacterId, second: CharacterId): void {
-    this.racerCharacters = { player, first, second };
+  setRacerCharacters(player: CharacterId, first: CharacterId, second: CharacterId, third: CharacterId): void {
+    this.racerCharacters = { player, first, second, third };
     this.refreshCharacterModels();
   }
 
@@ -722,7 +761,7 @@ export class GameView {
     this.createWorld();
   }
 
-  render(state: RiderState, rivalState: RivalState, guyState: RivalState, look: number, dt: number): void {
+  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, look: number, dt: number): void {
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
@@ -808,15 +847,17 @@ export class GameView {
     }
     this.updateOpponent(rivalState, this.rival, this.rivalVisual, this.rivalShadow, dt);
     this.updateOpponent(guyState, this.guy, this.guyVisual, this.guyShadow, dt);
-    this.updateSelectionRing(state, rivalState, guyState);
+    this.updateOpponent(giruState, this.giru, this.giruVisual, this.giruShadow, dt);
+    this.updateSelectionRing(state, rivalState, guyState, giruState);
     this.renderer.render(this.scene, this.camera);
   }
 
-  private updateSelectionRing(player: RiderState, first: RivalState, second: RivalState): void {
+  private updateSelectionRing(player: RiderState, first: RivalState, second: RivalState, third: RivalState): void {
     if (!this.selectionMode) { this.selectionRing.visible = false; return; }
     this.selectionRing.visible = true;
     const selected = this.selectedCharacter === this.racerCharacters.player ? player
-      : this.selectedCharacter === this.racerCharacters.first ? first : second;
+      : this.selectedCharacter === this.racerCharacters.first ? first
+        : this.selectedCharacter === this.racerCharacters.second ? second : third;
     const world = courseWorldPoint(selected.s, selected.x);
     this.selectionRing.position.set(world.x, courseTerrainHeight(selected.s, selected.x) + .075, world.z);
     const pulse = 1 + Math.sin(this.elapsedVisual * 5) * .09;
@@ -831,7 +872,7 @@ export class GameView {
     const moving = state.elapsed > .05 && state.s > .25;
     // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
     // a sola dentro da camada superficial da neve sem afundar o personagem.
-    const snowContactInset = state.id === "yeti" ? .14 : state.id === "guy" ? .085 : .035;
+    const snowContactInset = state.id === "yeti" ? .14 : state.id === "guy" ? .085 : state.id === "giru" ? .08 : .035;
     group.visible = state.s < COURSE_LENGTH + 4;
     // Usa o relevo lateral real, não apenas a altura da linha central. O pequeno
     // encaixe evita a fresta entre a base da prancha e a neve.
