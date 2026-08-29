@@ -6,6 +6,10 @@ export function courseMusicPath(order: number, base = import.meta.env.BASE_URL):
   return `${base}audio/track-${safeOrder}.mp3`;
 }
 
+export function menuMusicPath(base = import.meta.env.BASE_URL): string {
+  return `${base}audio/main-menu-theme.mp3`;
+}
+
 export class AudioManager {
   private context: AudioContext | null = null;
   private windGain: GainNode | null = null;
@@ -15,14 +19,26 @@ export class AudioManager {
   private musicGain: GainNode | null = null;
   private musicVolume = 0.38;
   private courseOrder = 1;
+  private musicMode: "menu" | "course" = "menu";
+
+  setMenuTrack(): void {
+    if (this.musicMode === "menu") return;
+    this.musicMode = "menu";
+    this.replaceMusic(menuMusicPath());
+  }
 
   setCourseTrack(order: number): void {
     const nextOrder = Math.round(clamp(order, 1, 4));
-    if (nextOrder === this.courseOrder && this.music) return;
+    if (this.musicMode === "course" && nextOrder === this.courseOrder) return;
+    this.musicMode = "course";
     this.courseOrder = nextOrder;
+    this.replaceMusic(courseMusicPath(this.courseOrder));
+  }
+
+  private replaceMusic(path: string): void {
     if (!this.music) return;
     this.music.pause();
-    this.music.src = courseMusicPath(this.courseOrder);
+    this.music.src = path;
     this.music.currentTime = 0;
     this.music.load();
     if (this.context?.state === "running") void this.music.play().catch(() => undefined);
@@ -53,7 +69,7 @@ export class AudioManager {
     noise.connect(filter).connect(gain).connect(master);
     noise.start();
 
-    const music = new Audio(courseMusicPath(this.courseOrder));
+    const music = new Audio(this.musicMode === "menu" ? menuMusicPath() : courseMusicPath(this.courseOrder));
     music.loop = true;
     music.preload = "auto";
     const musicSource = context.createMediaElementSource(music);

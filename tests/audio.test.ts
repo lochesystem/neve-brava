@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { courseMusicPath } from "../src/input/AudioManager.ts";
+import { courseMusicPath, menuMusicPath } from "../src/input/AudioManager.ts";
 
 describe("trilhas da campanha", () => {
+  it("mantém um tema próprio nos menus", () => {
+    expect(menuMusicPath("/neve-brava/")).toBe("/neve-brava/audio/main-menu-theme.mp3");
+  });
+
   it("vincula as quatro pistas às faixas enumeradas", () => {
     expect([1, 2, 3, 4].map(order => courseMusicPath(order, "/neve-brava/"))).toEqual([
       "/neve-brava/audio/track-1.mp3",

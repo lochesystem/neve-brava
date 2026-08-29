@@ -168,6 +168,9 @@ function showScreen(next: Screen): void {
 }
 
 function openCampaign(): void {
+  audio.setMenuTrack();
+  document.documentElement.dataset.musicTrack = "menu";
+  audio.start();
   view.setSelectionMode(false);
   renderTrackCards();
   updateSelectedCourseCopy();
@@ -248,6 +251,8 @@ function resume(): void {
 }
 
 function finish(): void {
+  audio.setMenuTrack();
+  document.documentElement.dataset.musicTrack = "menu";
   const course = getActiveCourse();
   $("#result-course").innerHTML = `${course.name}<br />concluída.`;
   $("#result-time").textContent = formatTime(state.elapsed);
@@ -371,7 +376,15 @@ function updateMenuInput(): void {
   }
   if (input.consumeMenu("pause") && screen === "paused" && !disconnectedPause) resume();
 }
-function openSettings(): void { settingsReturn = screen; showScreen("settings"); }
+function openSettings(): void {
+  settingsReturn = screen;
+  if (screen !== "paused" && screen !== "playing") {
+    audio.setMenuTrack();
+    document.documentElement.dataset.musicTrack = "menu";
+    audio.start();
+  }
+  showScreen("settings");
+}
 function closeSettings(): void { showScreen(settingsReturn); }
 
 function frame(now: number): void {
