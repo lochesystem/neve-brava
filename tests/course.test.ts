@@ -6,8 +6,8 @@ describe("pista", () => {
     expect(COURSE_LENGTH).toBeGreaterThanOrEqual(3_000);
     expect(RAMPS).toHaveLength(4);
     expect(OBSTACLES.length).toBeGreaterThan(60);
-    expect(COINS.length).toBeGreaterThanOrEqual(40);
-    expect(ITEM_BOXES).toHaveLength(5);
+    expect(COINS).toHaveLength(24);
+    expect(ITEM_BOXES).toHaveLength(9);
     expect(COINS.every(coin => coin.value === 100)).toBe(true);
     expect(ITEM_BOXES.every(box => box.cost === 200)).toBe(true);
     expect(validateCourse()).toEqual([]);

@@ -162,18 +162,18 @@ function safePickupX(course: CourseDefinition, s: number, preferred: number, rad
 function generatePickups(course: CourseDefinition): { coins: CoinPickup[]; boxes: ItemBox[] } {
   const random = mulberry32(course.scenerySeed ^ 0x4954454d);
   const coins: CoinPickup[] = [];
-  const clusterCount = 10 + course.order;
+  const clusterCount = 8;
   for (let cluster = 0; cluster < clusterCount; cluster += 1) {
     const centerS = 105 + cluster * (course.length - 240) / clusterCount;
     const preferred = (random() * 2 - 1) * (course.halfWidth - 4);
     const centerX = safePickupX(course, centerS, preferred, .65);
     const direction = random() > .5 ? 1 : -1;
-    for (let index = 0; index < 4; index += 1) {
-      const s = centerS + (index - 1.5) * 4.6;
+    for (let index = 0; index < 3; index += 1) {
+      const s = centerS + (index - 1) * 5.2;
       coins.push({
         id: `${course.id}-coin-${cluster}-${index}`,
         s,
-        x: clamp(centerX + direction * Math.sin(index / 3 * Math.PI) * 1.25, -course.halfWidth + 1.2, course.halfWidth - 1.2),
+        x: clamp(centerX + direction * Math.sin(index / 2 * Math.PI) * 1.25, -course.halfWidth + 1.2, course.halfWidth - 1.2),
         value: 100,
       });
     }
@@ -181,10 +181,12 @@ function generatePickups(course: CourseDefinition): { coins: CoinPickup[]; boxes
 
   const itemOrder: ItemKind[] = ["wind", "turbo", "shield"];
   const boxes: ItemBox[] = [];
-  const boxCount = 5;
+  const boxCount = 9;
   for (let index = 0; index < boxCount; index += 1) {
-    const s = 440 + index * (course.length - 760) / (boxCount - 1);
-    const preferred = (random() * 2 - 1) * (course.halfWidth - 4.5);
+    const s = 360 + index * (course.length - 620) / (boxCount - 1);
+    // Mantém as caixas próximas das linhas mais usadas para serem vistas e
+    // disputadas, sem transformá-las em bloqueios obrigatórios.
+    const preferred = (random() * 2 - 1) * course.halfWidth * .55;
     boxes.push({
       id: `${course.id}-box-${index}`,
       s,
