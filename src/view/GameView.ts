@@ -728,6 +728,7 @@ export class GameView {
     const world = courseWorldPoint(state.s, state.x);
     const frame = courseFrame(state.s);
     const boardY = state.y - 0.39;
+    const riderMoving = state.elapsed > .05 && state.s > .25;
     this.rider.position.set(world.x, boardY, world.z);
     const groundY = courseTerrainHeight(state.s, state.x);
     const airGap = Math.max(0, boardY - groundY - 0.08);
@@ -791,7 +792,7 @@ export class GameView {
       );
       this.spawnParticle(origin, Math.random() > 0.18 ? PALETTE.snow : PALETTE.snowBlue, 0.16 + Math.random() * 0.12, 0.48, spray);
     }
-    if (state.grounded && state.speed > 12 && Math.random() < dt * (this.quality === "performance" ? 36 : 78)) {
+    if (riderMoving && state.grounded && state.speed > 12 && Math.random() < dt * (this.quality === "performance" ? 36 : 78)) {
       const origin = new THREE.Vector3(world.x, boardY + 0.08, world.z);
       const spraySpeed = 6 + state.speed * 0.13;
       const backwards = new THREE.Vector3(-frame.tx * spraySpeed, 1.6 + Math.random() * 2.8, -frame.tz * spraySpeed);
@@ -827,6 +828,7 @@ export class GameView {
     const frame = courseFrame(state.s);
     const groundY = courseTerrainHeight(state.s, state.x);
     const surfaceOffset = Math.max(0, state.y - courseHeight(state.s) - .52);
+    const moving = state.elapsed > .05 && state.s > .25;
     // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
     // a sola dentro da camada superficial da neve sem afundar o personagem.
     const snowContactInset = state.id === "yeti" ? .14 : state.id === "guy" ? .085 : .035;
@@ -835,11 +837,11 @@ export class GameView {
     // encaixe evita a fresta entre a base da prancha e a neve.
     group.position.set(world.x, groundY + surfaceOffset - snowContactInset, world.z);
     group.rotation.set(
-      state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
+      state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded && moving ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
       frame.heading + state.heading + (state.grounded ? 0 : state.spin * clamp(state.airTime / .9, 0, 1)),
       state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : -state.carve * .27 + Math.sin(state.windHit * 18) * state.windHit * .42,
     );
-    const pump = state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
+    const pump = moving && state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
     visual.position.y = -pump;
     visual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
     const airGap = Math.max(0, surfaceOffset);
@@ -849,7 +851,7 @@ export class GameView {
     const scale = clamp(1 - airGap * .035, .55, 1);
     shadow.scale.set((state.id === "yeti" ? 1.9 : 1.8) * scale, (state.id === "yeti" ? .7 : .66) * scale, 1);
 
-    if (state.grounded && state.speed > 15 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
+    if (moving && state.grounded && state.speed > 15 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
       const origin = new THREE.Vector3(world.x, groundY + .12, world.z);
       const spray = new THREE.Vector3(-frame.tx * 7 + frame.nx * state.carve * 3, 1.5 + Math.random() * 2, -frame.tz * 7 + frame.nz * state.carve * 3);
       this.spawnParticle(origin, PALETTE.snow, .13 + Math.random() * .08, .42, spray);
