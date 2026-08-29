@@ -1,6 +1,8 @@
 import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
+  COINS,
+  ITEM_BOXES,
   OBSTACLES,
   RAMPS,
   courseHeight,
@@ -8,6 +10,7 @@ import {
   rampHeight,
   rampSurfaceElevation,
   sectionAt,
+  type ItemKind,
 } from "./course.ts";
 import { approach, clamp, crossing, lerp, wrapAngle } from "./math.ts";
 import { addCombo, evaluateTrick, gradeLanding, nearMissPoints, type LandingGrade } from "./scoring.ts";
@@ -25,6 +28,7 @@ export type GameIntent = {
   spinRight: boolean;
   flipHeld: boolean;
   recoverHeld: boolean;
+  itemPressed: boolean;
 };
 
 export const EMPTY_INTENT: GameIntent = {
@@ -40,6 +44,7 @@ export const EMPTY_INTENT: GameIntent = {
   spinRight: false,
   flipHeld: false,
   recoverHeld: false,
+  itemPressed: false,
 };
 
 export type GameEvent =
@@ -48,6 +53,11 @@ export type GameEvent =
   | { type: "NEAR_MISS"; points: number }
   | { type: "CRASH"; obstacle?: string }
   | { type: "SECTION"; name: string; color: string }
+  | { type: "COIN"; value: 100; id: string }
+  | { type: "ITEM_ACQUIRED"; item: ItemKind; cost: 200 }
+  | { type: "ITEM_BOX_BLOCKED"; item: ItemKind }
+  | { type: "ITEM_USED"; item: ItemKind }
+  | { type: "SHIELD_BREAK" }
   | { type: "FINISH" };
 
 export type RiderState = {
@@ -70,6 +80,12 @@ export type RiderState = {
   tumbleTime: number;
   tumbleDirection: number;
   invulnerable: number;
+  credits: number;
+  item: ItemKind | null;
+  turboTime: number;
+  shieldTime: number;
+  collectedCoins: string[];
+  collectedBoxes: string[];
   score: number;
   combo: number;
   bestCombo: number;
@@ -111,6 +127,12 @@ export function createRider(): RiderState {
     tumbleTime: 0,
     tumbleDirection: 1,
     invulnerable: 0,
+    credits: 0,
+    item: null,
+    turboTime: 0,
+    shieldTime: 0,
+    collectedCoins: [],
+    collectedBoxes: [],
     score: 0,
     combo: 1,
     bestCombo: 1,
@@ -158,8 +180,16 @@ function beginAir(state: RiderState, launch: number, ramp: boolean, events: Game
   events.push({ type: "TAKEOFF", ramp });
 }
 
-function crash(state: RiderState, events: GameEvent[], obstacle?: string): void {
+function crash(state: RiderState, events: GameEvent[], obstacle?: string, force = false): void {
   if (state.recovering > 0 || state.invulnerable > 0 || state.finished) return;
+  if (!force && obstacle && state.shieldTime > 0) {
+    state.shieldTime = 0;
+    state.invulnerable = .65;
+    state.speed *= .9;
+    events.push({ type: "SHIELD_BREAK" });
+    return;
+  }
+  if (force) state.shieldTime = 0;
   const tumbleMomentum = state.lateralSpeed + state.carve * 3 + Math.sin(state.spin) * 2;
   state.tumbleDirection = Math.sign(tumbleMomentum) || (state.x >= 0 ? 1 : -1);
   state.tumbleTime = 0;
@@ -171,6 +201,39 @@ function crash(state: RiderState, events: GameEvent[], obstacle?: string): void 
   state.verticalSpeed = 0;
   state.grounded = false;
   events.push({ type: "CRASH", obstacle });
+}
+
+function updatePickups(state: RiderState, previousS: number, events: GameEvent[]): void {
+  const heightAboveSnow = state.y - courseHeight(state.s);
+  for (const coin of COINS) {
+    if (state.collectedCoins.includes(coin.id) || !crossing(previousS, state.s + .9, coin.s)) continue;
+    if (Math.abs(state.x - coin.x) > 1.25 || heightAboveSnow > 2.8) continue;
+    state.collectedCoins.push(coin.id);
+    state.credits += coin.value;
+    events.push({ type: "COIN", value: coin.value, id: coin.id });
+  }
+  for (const box of ITEM_BOXES) {
+    if (state.collectedBoxes.includes(box.id) || !crossing(previousS, state.s + .9, box.s)) continue;
+    if (Math.abs(state.x - box.x) > box.radius + .72 || heightAboveSnow > box.height + .35) continue;
+    if (state.credits >= box.cost) {
+      state.collectedBoxes.push(box.id);
+      state.credits -= box.cost;
+      state.item = box.item;
+      events.push({ type: "ITEM_ACQUIRED", item: box.item, cost: box.cost });
+    } else {
+      events.push({ type: "ITEM_BOX_BLOCKED", item: box.item });
+      crash(state, events, "item-box", true);
+    }
+  }
+}
+
+function useItem(state: RiderState, events: GameEvent[]): void {
+  if (!state.item) return;
+  const item = state.item;
+  state.item = null;
+  if (item === "turbo") state.turboTime = 2.6;
+  if (item === "shield") state.shieldTime = 6;
+  events.push({ type: "ITEM_USED", item });
 }
 
 function land(state: RiderState, events: GameEvent[]): void {
@@ -258,6 +321,8 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number): 
   const step = clamp(dt, 0, 1 / 20);
   state.elapsed += step;
   state.invulnerable = Math.max(0, state.invulnerable - step);
+  state.turboTime = Math.max(0, state.turboTime - step);
+  state.shieldTime = Math.max(0, state.shieldTime - step);
 
   if (state.recovering > 0) {
     state.recovering = Math.max(0, state.recovering - step);
@@ -277,20 +342,28 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number): 
     return events;
   }
 
+  if (intent.itemPressed) useItem(state, events);
+
   const previousS = state.s;
   state.carve = approach(state.carve, intent.steer, step * (state.grounded ? 5.8 : 2.2));
 
   if (state.grounded) {
     const edgeDrag = Math.max(0, Math.abs(state.x) - 13.5) * 0.72;
-    const acceleration = 5.8 + intent.tuck * 8.5 - intent.brake * 15 - state.carve * state.carve * 2.2 - edgeDrag;
-    state.speed = clamp(state.speed + acceleration * step, 12, 45);
+    const acceleration = 5.8 + intent.tuck * 8.5 - intent.brake * 15 - state.carve * state.carve * 2.2 - edgeDrag + (state.turboTime > 0 ? 18 : 0);
+    const acceleratedSpeed = state.speed + acceleration * step;
+    state.speed = state.turboTime > 0
+      ? clamp(acceleratedSpeed, 12, 53)
+      : state.speed > 45 ? approach(state.speed, 45, 4 * step) : clamp(acceleratedSpeed, 12, 45);
     const targetLateral = state.carve * Math.min(18, state.speed * 0.38);
     state.lateralSpeed = approach(state.lateralSpeed, targetLateral, 28 * step);
     state.heading = approach(state.heading, -state.carve * 0.42, 3.8 * step);
     state.jumpCharge = intent.jumpHeld ? clamp(state.jumpCharge + step, 0, 0.72) : state.jumpCharge;
     if (intent.jumpReleased && state.jumpCharge > 0.08) beginAir(state, 5.8 + state.jumpCharge * 4.8, false, events);
   } else {
-    state.speed = clamp(state.speed + 0.55 * step, 12, 47);
+    const airborneSpeed = state.speed + (state.turboTime > 0 ? 9 : .55) * step;
+    state.speed = state.turboTime > 0
+      ? clamp(airborneSpeed, 12, 54)
+      : state.speed > 47 ? approach(state.speed, 47, 3 * step) : clamp(airborneSpeed, 12, 47);
     state.lateralSpeed = approach(state.lateralSpeed, intent.steer * Math.min(16, state.speed * 0.3), 9 * step);
     const spinDirection = Number(intent.spinRight) - Number(intent.spinLeft);
     state.spin += spinDirection * 5.2 * step;
@@ -318,6 +391,7 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number): 
   updateRamps(state, previousS, events);
   if (!state.grounded && state.y <= courseHeight(state.s) + 0.46 && state.verticalSpeed < 0) land(state, events);
   if (state.grounded) state.y = courseHeight(state.s) + rampSurfaceElevation(state.s, state.x) + 0.46;
+  updatePickups(state, previousS, events);
   updateObstacles(state, previousS, events);
 
   if (state.grounded && state.invulnerable <= 0 && state.s - state.lastSafeS > 18) {

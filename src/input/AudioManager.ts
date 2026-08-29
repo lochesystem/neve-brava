@@ -93,6 +93,11 @@ export class AudioManager {
       NEAR_MISS: [760, 1_100, 0.12],
       CRASH: [130, 48, 0.28],
       SECTION: [440, 660, 0.18],
+      COIN: [720, 1_180, .1],
+      ITEM_ACQUIRED: [360, 920, .2],
+      ITEM_BOX_BLOCKED: [120, 62, .2],
+      ITEM_USED: [280, 1_080, .24],
+      SHIELD_BREAK: [980, 260, .24],
       FINISH: [520, 1_040, 0.38],
     };
     const profile = profiles[event.type];

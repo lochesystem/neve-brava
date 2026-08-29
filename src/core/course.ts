@@ -1,8 +1,11 @@
 import { clamp } from "./math.ts";
 
 export type ObstacleKind = "tree" | "rock" | "fence" | "ice" | "log" | "snowball";
+export type ItemKind = "wind" | "turbo" | "shield";
 export type Obstacle = { id: string; kind: ObstacleKind; s: number; x: number; radius: number; height: number; accent?: boolean; decorative?: boolean };
 export type Ramp = { id: string; s: number; x: number; width: number; launch: number; built: boolean };
+export type CoinPickup = { id: string; s: number; x: number; value: 100 };
+export type ItemBox = { id: string; s: number; x: number; item: ItemKind; cost: 200; radius: number; height: number };
 export type CourseSection = { start: number; end: number; name: string; color: string };
 type Wave = { amplitude: number; frequency: number; phase: number };
 
@@ -118,6 +121,8 @@ export let COURSE_HALF_WIDTH = activeCourse.halfWidth;
 export let SECTIONS = activeCourse.sections;
 export let RAMPS: Ramp[] = [];
 export let OBSTACLES: Obstacle[] = [];
+export let COINS: CoinPickup[] = [];
+export let ITEM_BOXES: ItemBox[] = [];
 
 function mulberry32(seed: number): () => number {
   let value = seed >>> 0;
@@ -144,6 +149,55 @@ function decorateSafeEdges(course: CourseDefinition): Obstacle[] {
   return result;
 }
 
+function safePickupX(course: CourseDefinition, s: number, preferred: number, radius: number): number {
+  const edge = course.halfWidth - radius - 1.4;
+  const candidates = [preferred, 0, -preferred, edge * .55, -edge * .55].map(value => clamp(value, -edge, edge));
+  return candidates.find(candidate => course.obstacles.every(obstacle =>
+    Math.abs(obstacle.s - s) > 16 || Math.abs(obstacle.x - candidate) > obstacle.radius + radius + 1.4,
+  ) && course.ramps.every(ramp =>
+    Math.abs(ramp.s - s) > 24 || Math.abs(ramp.x - candidate) > ramp.width / 2 + radius + 1,
+  )) ?? clamp(preferred, -edge, edge);
+}
+
+function generatePickups(course: CourseDefinition): { coins: CoinPickup[]; boxes: ItemBox[] } {
+  const random = mulberry32(course.scenerySeed ^ 0x4954454d);
+  const coins: CoinPickup[] = [];
+  const clusterCount = 10 + course.order;
+  for (let cluster = 0; cluster < clusterCount; cluster += 1) {
+    const centerS = 105 + cluster * (course.length - 240) / clusterCount;
+    const preferred = (random() * 2 - 1) * (course.halfWidth - 4);
+    const centerX = safePickupX(course, centerS, preferred, .65);
+    const direction = random() > .5 ? 1 : -1;
+    for (let index = 0; index < 4; index += 1) {
+      const s = centerS + (index - 1.5) * 4.6;
+      coins.push({
+        id: `${course.id}-coin-${cluster}-${index}`,
+        s,
+        x: clamp(centerX + direction * Math.sin(index / 3 * Math.PI) * 1.25, -course.halfWidth + 1.2, course.halfWidth - 1.2),
+        value: 100,
+      });
+    }
+  }
+
+  const itemOrder: ItemKind[] = ["wind", "turbo", "shield"];
+  const boxes: ItemBox[] = [];
+  const boxCount = 5;
+  for (let index = 0; index < boxCount; index += 1) {
+    const s = 440 + index * (course.length - 760) / (boxCount - 1);
+    const preferred = (random() * 2 - 1) * (course.halfWidth - 4.5);
+    boxes.push({
+      id: `${course.id}-box-${index}`,
+      s,
+      x: safePickupX(course, s, preferred, 1.15),
+      item: itemOrder[(index + course.order - 1) % itemOrder.length],
+      cost: 200,
+      radius: 1.05,
+      height: 2.1,
+    });
+  }
+  return { coins, boxes };
+}
+
 function activate(course: CourseDefinition): void {
   activeCourse = course;
   COURSE_LENGTH = course.length;
@@ -151,6 +205,9 @@ function activate(course: CourseDefinition): void {
   SECTIONS = course.sections;
   RAMPS = course.ramps.map(item => ({ ...item, id: `${course.id}-${item.id}` }));
   OBSTACLES = [...course.obstacles.map(item => ({ ...item, id: `${course.id}-${item.id}` })), ...decorateSafeEdges(course)];
+  const pickups = generatePickups(course);
+  COINS = pickups.coins;
+  ITEM_BOXES = pickups.boxes;
 }
 
 export function setActiveCourse(id: string): CourseDefinition {
@@ -215,6 +272,10 @@ export function validateCourse(): string[] {
     if (!item.decorative && Math.abs(item.x) + item.radius > COURSE_HALF_WIDTH) issues.push(`${item.id}: obstáculo fora da pista.`);
     if (item.decorative && Math.abs(item.x) < COURSE_HALF_WIDTH + 2) issues.push(`${item.id}: decoração invade a pista.`);
     if (item.radius > COURSE_HALF_WIDTH - 3) issues.push(`${item.id}: obstáculo bloqueia toda a rota.`);
+  }
+  for (const box of ITEM_BOXES) {
+    if (Math.abs(box.x) + box.radius > COURSE_HALF_WIDTH - .2) issues.push(`${box.id}: caixa fora da pista.`);
+    if (OBSTACLES.some(obstacle => !obstacle.decorative && Math.abs(obstacle.s - box.s) < 12 && Math.abs(obstacle.x - box.x) < obstacle.radius + box.radius + .8)) issues.push(`${box.id}: caixa sobreposta a obstáculo.`);
   }
   for (let s = 0; s < COURSE_LENGTH; s += 10) if (Math.abs(courseSlope(s)) > .25) issues.push(`Inclinação excessiva em ${s} m.`);
   return issues;

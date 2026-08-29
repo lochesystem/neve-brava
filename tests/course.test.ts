@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, OBSTACLES, RAMPS, courseCenterX, courseFrame, courseHeight, setActiveCourse, validateAllCourses, validateCourse } from "../src/core/course.ts";
+import { COINS, COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, OBSTACLES, RAMPS, courseCenterX, courseFrame, courseHeight, setActiveCourse, validateAllCourses, validateCourse } from "../src/core/course.ts";
 
 describe("pista", () => {
   it("possui duração, conteúdo e geometria válidos", () => {
     expect(COURSE_LENGTH).toBeGreaterThanOrEqual(3_000);
     expect(RAMPS).toHaveLength(4);
     expect(OBSTACLES.length).toBeGreaterThan(60);
+    expect(COINS.length).toBeGreaterThanOrEqual(40);
+    expect(ITEM_BOXES).toHaveLength(5);
+    expect(COINS.every(coin => coin.value === 100)).toBe(true);
+    expect(ITEM_BOXES.every(box => box.cost === 200)).toBe(true);
     expect(validateCourse()).toEqual([]);
   });
 
@@ -41,6 +45,7 @@ describe("pista", () => {
       setActiveCourse(course.id);
       expect(RAMPS).toHaveLength(4);
       expect(OBSTACLES.some(item => !item.decorative)).toBe(true);
+      expect(new Set(ITEM_BOXES.map(box => box.item))).toEqual(new Set(["wind", "turbo", "shield"]));
       expect(courseHeight(COURSE_LENGTH)).toBeLessThan(courseHeight(0) - 300);
     }
     setActiveCourse(COURSES[0].id);

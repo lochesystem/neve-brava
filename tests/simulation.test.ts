@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RAMPS, courseHeight, courseSlope, rampHeight, rampLength } from "../src/core/course.ts";
+import { COINS, ITEM_BOXES, OBSTACLES, RAMPS, courseHeight, courseSlope, rampHeight, rampLength } from "../src/core/course.ts";
 import { EMPTY_INTENT, createRider, interpolateRider, updateRider } from "../src/core/simulation.ts";
 
 describe("simulação da prancha", () => {
@@ -148,5 +148,59 @@ describe("simulação da prancha", () => {
     expect(halfway.s).toBe(6);
     expect(halfway.x).toBe(2);
     expect(Math.abs(Math.abs(halfway.heading) - Math.PI)).toBeLessThan(0.02);
+  });
+
+  it("coleta moedas de 100 créditos", () => {
+    const coin = COINS[0];
+    const rider = createRider();
+    rider.s = coin.s - .2; rider.x = coin.x; rider.y = courseHeight(rider.s) + .46; rider.speed = 30;
+    const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
+    expect(events).toContainEqual({ type: "COIN", value: 100, id: coin.id });
+    expect(rider.credits).toBe(100);
+    expect(rider.collectedCoins).toContain(coin.id);
+  });
+
+  it("compra uma arma por 200 créditos e equipa no único slot", () => {
+    const box = ITEM_BOXES[0];
+    const rider = createRider();
+    rider.credits = 200;
+    rider.s = box.s - .2; rider.x = box.x; rider.y = courseHeight(rider.s) + .46; rider.speed = 30;
+    const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
+    expect(events).toContainEqual({ type: "ITEM_ACQUIRED", item: box.item, cost: 200 });
+    expect(rider.credits).toBe(0);
+    expect(rider.item).toBe(box.item);
+    expect(rider.recovering).toBe(0);
+  });
+
+  it("transforma a caixa em obstáculo quando faltam créditos", () => {
+    const box = ITEM_BOXES[0];
+    const rider = createRider();
+    rider.credits = 100;
+    rider.s = box.s - .2; rider.x = box.x; rider.y = courseHeight(rider.s) + .46; rider.speed = 30;
+    const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
+    expect(events).toContainEqual({ type: "ITEM_BOX_BLOCKED", item: box.item });
+    expect(events.some(event => event.type === "CRASH" && event.obstacle === "item-box")).toBe(true);
+    expect(rider.recovering).toBeGreaterThan(0);
+    expect(rider.collectedBoxes).not.toContain(box.id);
+  });
+
+  it("ativa turbo e usa o escudo para absorver um obstáculo comum", () => {
+    const turboRider = createRider();
+    turboRider.item = "turbo";
+    updateRider(turboRider, { ...EMPTY_INTENT, itemPressed: true }, 1 / 60);
+    expect(turboRider.item).toBeNull();
+    expect(turboRider.turboTime).toBeGreaterThan(2.5);
+    for (let index = 0; index < 120; index += 1) updateRider(turboRider, { ...EMPTY_INTENT, tuck: 1 }, 1 / 60);
+    expect(turboRider.speed).toBeGreaterThan(45);
+
+    const obstacle = OBSTACLES.find(item => !item.decorative)!;
+    const shieldRider = createRider();
+    shieldRider.item = "shield";
+    updateRider(shieldRider, { ...EMPTY_INTENT, itemPressed: true }, 1 / 60);
+    shieldRider.s = obstacle.s - .2; shieldRider.x = obstacle.x; shieldRider.y = courseHeight(shieldRider.s) + .46; shieldRider.speed = 30;
+    const events = updateRider(shieldRider, EMPTY_INTENT, 1 / 60);
+    expect(events.some(event => event.type === "SHIELD_BREAK")).toBe(true);
+    expect(events.some(event => event.type === "CRASH")).toBe(false);
+    expect(shieldRider.shieldTime).toBe(0);
   });
 });

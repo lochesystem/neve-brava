@@ -5,7 +5,7 @@ import {
 } from "./core/course.ts";
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
 import {
-  createRival, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
+  applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
   updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
@@ -52,6 +52,10 @@ const sectionLabel = $("#section");
 const timeLabel = $("#time");
 const scoreLabel = $("#score");
 const comboLabel = $("#combo");
+const creditsLabel = $("#credits");
+const itemNameLabel = $("#item-name");
+const itemIconLabel = $("#item-icon");
+const itemHud = $("#item-hud");
 const toast = $("#toast");
 const countdownLabel = $("#countdown");
 const startButton = $("#start-button") as HTMLButtonElement;
@@ -238,7 +242,26 @@ function handleEvent(event: GameEvent): void {
     showToast(event.grade === "crash" ? "POUSO PERDIDO" : `${event.label}  +${event.points}`, event.grade === "clean" ? "clean" : event.grade === "crash" ? "crash" : "");
   }
   if (event.type === "NEAR_MISS") { input.pulse(.12, .68, 70); showToast(`POR UM FIO  +${event.points}`, "near"); }
-  if (event.type === "CRASH") { input.pulse(1, .7, 260); showToast("TUMBOU!", "crash"); }
+  if (event.type === "COIN") { input.pulse(.08, .22, 42, 20); showToast(`MOEDA  +${event.value}`, "coin"); }
+  if (event.type === "ITEM_ACQUIRED") {
+    input.pulse(.28, .62, 120);
+    showToast(`${event.item === "wind" ? "TIRO DE VENTO" : event.item === "turbo" ? "TURBO" : "ESCUDO"} EQUIPADO`, "clean");
+  }
+  if (event.type === "ITEM_USED") {
+    input.pulse(event.item === "turbo" ? .7 : .35, .65, event.item === "turbo" ? 220 : 140);
+    if (event.item === "wind") {
+      const target = [rival, guy]
+        .filter(opponent => opponent.s >= state.s - 4 && opponent.s - state.s <= 100 && !opponent.finished)
+        .sort((first, second) => Math.abs(first.s - state.s) - Math.abs(second.s - state.s))[0];
+      if (target) { applyWindHit(target); showToast(`VENTANIA NO ${target.name}!`, "wind"); }
+      else showToast("TIRO DE VENTO!", "wind");
+    } else showToast(event.item === "turbo" ? "TURBO!" : "ESCUDO ATIVO!", event.item === "turbo" ? "coin" : "clean");
+  }
+  if (event.type === "SHIELD_BREAK") { input.pulse(.55, .8, 180); showToast("ESCUDO SALVOU!", "clean"); }
+  if (event.type === "CRASH") {
+    input.pulse(1, .7, 260);
+    showToast(event.obstacle === "item-box" ? "SEM 200 · CAIXA DERRUBOU!" : "TUMBOU!", "crash");
+  }
   if (event.type === "SECTION") showToast(event.name.toUpperCase(), "clean");
   if (event.type === "FINISH") { input.pulse(.45, .8, 420); window.setTimeout(finish, 500); }
 }
@@ -255,6 +278,14 @@ function updateHud(force = false): void {
   timeLabel.textContent = formatTime(state.elapsed);
   scoreLabel.textContent = String(state.score).padStart(6, "0");
   comboLabel.textContent = `×${state.combo.toFixed(1)}`;
+  creditsLabel.textContent = String(state.credits);
+  const activeItem = state.item ?? (state.turboTime > 0 ? "turbo" : state.shieldTime > 0 ? "shield" : null);
+  const itemNames = { wind: "TIRO DE VENTO", turbo: state.turboTime > 0 ? `TURBO ${state.turboTime.toFixed(1)}s` : "TURBO", shield: state.shieldTime > 0 ? `ESCUDO ${state.shieldTime.toFixed(1)}s` : "ESCUDO" } as const;
+  const itemIcons = { wind: "➤", turbo: "⚡", shield: "◆" } as const;
+  itemNameLabel.textContent = activeItem ? itemNames[activeItem] : "VAZIO";
+  itemIconLabel.textContent = activeItem ? itemIcons[activeItem] : "—";
+  itemHud.dataset.item = activeItem ?? "empty";
+  itemHud.classList.toggle("active", Boolean(state.item));
   updateMapMarker();
 }
 
@@ -310,7 +341,7 @@ function frame(now: number): void {
     } else {
       accumulator = Math.min(.25, accumulator + dt); let firstStep = true;
       while (accumulator >= fixedStep) {
-        const stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false };
+        const stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false, itemPressed: false };
         previousRider = { ...state }; const progressBeforeStep = state.s;
         previousRival = { ...rival };
         previousGuy = { ...guy };

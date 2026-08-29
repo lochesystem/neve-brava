@@ -1,6 +1,7 @@
 import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
+  ITEM_BOXES,
   OBSTACLES,
   RAMPS,
   courseHeight,
@@ -45,6 +46,7 @@ export type RivalState = {
   crashes: number;
   lastRamp: string;
   contactCooldown: number;
+  windHit: number;
 };
 
 export type RivalProfile = Pick<RivalState, "id" | "name" | "linePhase" | "paceBias" | "aggression" | "rampAffinity"> & {
@@ -88,6 +90,7 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     crashes: 0,
     lastRamp: "",
     contactCooldown: 0,
+    windHit: 0,
   };
 }
 
@@ -99,6 +102,12 @@ function lineRisk(state: RivalState, candidate: number, preferredLine: number): 
     if (ahead < 5 || ahead > 82) continue;
     const clearance = Math.abs(candidate - obstacle.x) - obstacle.radius;
     if (clearance < 3.3) risk += (3.3 - clearance) * (2.25 - ahead / 105);
+  }
+  for (const box of ITEM_BOXES) {
+    const ahead = box.s - state.s;
+    if (ahead < 5 || ahead > 76) continue;
+    const clearance = Math.abs(candidate - box.x) - box.radius;
+    if (clearance < 3) risk += (3 - clearance) * (2.1 - ahead / 100);
   }
   // Cada perfil decide quanto vale abandonar a linha atual para buscar uma rampa.
   for (const ramp of RAMPS) {
@@ -136,7 +145,18 @@ function obstacleCollision(state: RivalState): boolean {
   if (!state.grounded || state.stun > 0) return false;
   return OBSTACLES.some(obstacle => !obstacle.decorative
     && Math.abs(obstacle.s - state.s) < 1.15
-    && Math.abs(obstacle.x - state.x) < obstacle.radius + .72);
+    && Math.abs(obstacle.x - state.x) < obstacle.radius + .72)
+    || ITEM_BOXES.some(box => Math.abs(box.s - state.s) < 1.15 && Math.abs(box.x - state.x) < box.radius + .72);
+}
+
+export function applyWindHit(state: RivalState): void {
+  if (state.finished || state.stun > 0) return;
+  const direction = Math.sign(state.x) || (Math.sin(state.s + state.linePhase) > 0 ? 1 : -1);
+  state.windHit = .72;
+  state.speed *= .78;
+  state.lateralSpeed += direction * 7.5;
+  state.targetX = clamp(state.x + direction * 5.5, -COURSE_HALF_WIDTH + 1.4, COURSE_HALF_WIDTH - 1.4);
+  state.decisionTimer = .8;
 }
 
 export function updateRival(state: RivalState, playerS: number, playerX: number, dt: number): RivalEvent[] {
@@ -145,6 +165,7 @@ export function updateRival(state: RivalState, playerS: number, playerX: number,
   const step = clamp(dt, 0, 1 / 20);
   state.elapsed += step;
   state.contactCooldown = Math.max(0, state.contactCooldown - step);
+  state.windHit = Math.max(0, state.windHit - step);
 
   if (state.stun > 0) {
     state.stun = Math.max(0, state.stun - step);
@@ -282,5 +303,6 @@ export function interpolateRival(previous: RivalState, current: RivalState, alph
     spin: previous.spin + wrapAngle(current.spin - previous.spin) * amount,
     airTime: lerp(previous.airTime, current.airTime, amount),
     tumble: lerp(previous.tumble, current.tumble, amount),
+    windHit: lerp(previous.windHit, current.windHit, amount),
   };
 }

@@ -3,6 +3,8 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
+  COINS,
+  ITEM_BOXES,
   OBSTACLES,
   RAMPS,
   courseFrame,
@@ -12,6 +14,7 @@ import {
   courseWorldPoint,
   rampHeight,
   rampLength,
+  type ItemKind,
 } from "../core/course.ts";
 import { dampAlpha, clamp } from "../core/math.ts";
 import { CRASH_RECOVERY_TIME, type GameEvent, type RiderState } from "../core/simulation.ts";
@@ -130,6 +133,43 @@ function createSnowball(scale: number, accent = false): THREE.Group {
     ball.position.set((index - 1) * scale * 0.56, scale * (0.55 + (index % 2) * 0.16), (index % 2) * 0.28);
     group.add(ball);
   }
+  return group;
+}
+
+function createCoin(): THREE.Group {
+  const group = new THREE.Group();
+  const rim = outlined(new THREE.TorusGeometry(.48, .12, 7, 18), PALETTE.yellow);
+  const face = outlined(new THREE.CylinderGeometry(.39, .39, .11, 18), 0xffdf72);
+  face.rotation.x = Math.PI / 2;
+  group.add(rim, face);
+  const mark = createLabel("100", .72, .28, "#253348");
+  mark.position.z = .14;
+  group.add(mark);
+  group.scale.setScalar(1.08);
+  return group;
+}
+
+function itemColor(item: ItemKind): number {
+  return item === "wind" ? 0x73bce3 : item === "turbo" ? PALETTE.yellow : PALETTE.mint;
+}
+
+function createItemBox(item: ItemKind): THREE.Group {
+  const group = new THREE.Group();
+  const body = outlined(new THREE.BoxGeometry(1.75, 1.65, 1.75), itemColor(item));
+  body.position.y = .92;
+  group.add(body);
+  const ribbon = outlined(new THREE.BoxGeometry(1.98, .28, .34), item === "turbo" ? PALETTE.coral : PALETTE.ink);
+  ribbon.position.set(0, 1.02, .9);
+  group.add(ribbon);
+  const label = createLabel(item === "wind" ? "VENTO" : item === "turbo" ? "TURBO" : "ESCUDO", 1.55, .48, "#fff8e7");
+  label.position.set(0, 1.15, .93);
+  group.add(label);
+  const cost = createLabel("200", 1.05, .36, "#253348");
+  cost.position.set(0, .55, .94);
+  group.add(cost);
+  const beacon = outlined(new THREE.OctahedronGeometry(.32, 0), itemColor(item));
+  beacon.position.y = 2.15;
+  group.add(beacon);
   return group;
 }
 
@@ -414,6 +454,12 @@ export class GameView {
     new THREE.CircleGeometry(0.86, 20),
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
   );
+  private riderShield = new THREE.Mesh(
+    new THREE.SphereGeometry(1.55, 18, 12),
+    new THREE.MeshBasicMaterial({ color: 0x73e0d0, transparent: true, opacity: .18, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  private coinVisuals: Array<{ id: string; object: THREE.Group; baseY: number; heading: number; phase: number }> = [];
+  private boxVisuals: Array<{ id: string; object: THREE.Group; baseY: number; heading: number; phase: number }> = [];
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
   private snowMaterial = toon(PALETTE.snow, { vertexColors: true });
@@ -446,6 +492,9 @@ export class GameView {
     this.riderVisual.position.y = -1.18;
     this.riderTumblePivot.add(this.riderVisual);
     this.rider.add(this.riderTumblePivot);
+    this.riderShield.position.y = 1.12;
+    this.riderShield.visible = false;
+    this.rider.add(this.riderShield);
     this.rival.add(this.rivalVisual);
     this.guy.add(this.guyVisual);
     this.rivalShadow.rotation.x = -Math.PI / 2;
@@ -572,6 +621,8 @@ export class GameView {
       for (const material of materials) if (material !== this.snowMaterial) material.dispose();
     });
     this.world.clear();
+    this.coinVisuals = [];
+    this.boxVisuals = [];
     this.snowfall = null;
     this.snowfallPositions = null;
     this.createWorld();
@@ -629,6 +680,13 @@ export class GameView {
     this.updateCamera(state, dt);
     this.updateParticles(dt);
     this.updateSnowfall(state, dt);
+    this.updatePickupVisuals(state);
+    this.riderShield.visible = state.shieldTime > 0;
+    if (state.shieldTime > 0) {
+      const pulse = 1 + Math.sin(this.elapsedVisual * 8) * .035;
+      this.riderShield.scale.setScalar(pulse);
+      (this.riderShield.material as THREE.MeshBasicMaterial).opacity = .14 + Math.sin(this.elapsedVisual * 8) * .045;
+    }
     if (state.recovering > 0 && Math.random() < dt * (this.quality === "performance" ? 20 : 42)) {
       const origin = new THREE.Vector3(world.x, groundY + 0.16, world.z);
       const spray = new THREE.Vector3(
@@ -646,6 +704,11 @@ export class GameView {
       backwards.x += frame.nx * side * (1.4 + Math.abs(state.carve) * 3);
       backwards.z += frame.nz * side * (1.4 + Math.abs(state.carve) * 3);
       this.spawnParticle(origin, PALETTE.snow, 0.13 + Math.random() * 0.1, 0.5, backwards);
+    }
+    if (state.turboTime > 0 && Math.random() < dt * (this.quality === "performance" ? 45 : 95)) {
+      const origin = new THREE.Vector3(world.x - frame.tx * 1.1, boardY + .28, world.z - frame.tz * 1.1);
+      const velocity = new THREE.Vector3(-frame.tx * (10 + Math.random() * 7), 1 + Math.random() * 1.8, -frame.tz * (10 + Math.random() * 7));
+      this.spawnParticle(origin, Math.random() > .45 ? PALETTE.yellow : PALETTE.coral, .17 + Math.random() * .12, .36, velocity);
     }
     this.updateOpponent(rivalState, this.rival, this.rivalVisual, this.rivalShadow, dt);
     this.updateOpponent(guyState, this.guy, this.guyVisual, this.guyShadow, dt);
@@ -667,7 +730,7 @@ export class GameView {
     group.rotation.set(
       state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
       frame.heading + state.heading + (state.grounded ? 0 : state.spin * clamp(state.airTime / .9, 0, 1)),
-      state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : -state.carve * .27,
+      state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : -state.carve * .27 + Math.sin(state.windHit * 18) * state.windHit * .42,
     );
     const pump = state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
     visual.position.y = -pump;
@@ -689,8 +752,11 @@ export class GameView {
   event(event: GameEvent, state: RiderState): void {
     const world = courseWorldPoint(state.s, state.x);
     const position = new THREE.Vector3(world.x, state.y, world.z);
-    const count = event.type === "CRASH" ? 20 : event.type === "LAND" ? 14 : event.type === "TAKEOFF" ? 8 : 5;
-    const color = event.type === "CRASH" ? PALETTE.coral : event.type === "NEAR_MISS" ? PALETTE.yellow : PALETTE.snowBlue;
+    const count = event.type === "CRASH" ? 20 : event.type === "LAND" ? 14 : event.type === "ITEM_USED" || event.type === "SHIELD_BREAK" ? 18 : event.type === "TAKEOFF" ? 8 : 5;
+    const color = event.type === "CRASH" ? PALETTE.coral
+      : event.type === "COIN" || (event.type === "ITEM_USED" && event.item === "turbo") ? PALETTE.yellow
+      : event.type === "ITEM_ACQUIRED" || event.type === "SHIELD_BREAK" ? PALETTE.mint
+      : event.type === "NEAR_MISS" ? PALETTE.yellow : PALETTE.snowBlue;
     for (let index = 0; index < count; index += 1) this.spawnParticle(position, color, event.type === "CRASH" ? 0.3 : 0.18, 0.65 + Math.random() * 0.4);
   }
 
@@ -785,6 +851,28 @@ export class GameView {
       model.rotation.y = courseFrame(obstacle.s).heading + (obstacle.s * 0.17) % 0.5 - 0.25;
       this.world.add(model);
     }
+    for (let index = 0; index < COINS.length; index += 1) {
+      const coin = COINS[index];
+      const object = createCoin();
+      const world = courseWorldPoint(coin.s, coin.x);
+      const baseY = courseTerrainHeight(coin.s, coin.x) + 1.25;
+      const heading = courseFrame(coin.s).heading;
+      object.position.set(world.x, baseY, world.z);
+      object.rotation.y = heading;
+      this.world.add(object);
+      this.coinVisuals.push({ id: coin.id, object, baseY, heading, phase: index * 1.7 });
+    }
+    for (let index = 0; index < ITEM_BOXES.length; index += 1) {
+      const box = ITEM_BOXES[index];
+      const object = createItemBox(box.item);
+      const world = courseWorldPoint(box.s, box.x);
+      const baseY = courseTerrainHeight(box.s, box.x) + .04;
+      const heading = courseFrame(box.s).heading;
+      object.position.set(world.x, baseY, world.z);
+      object.rotation.y = heading;
+      this.world.add(object);
+      this.boxVisuals.push({ id: box.id, object, baseY, heading, phase: index * 2.1 });
+    }
     this.createSceneryInstances();
     this.createCourseEdges();
     this.createEventAreas();
@@ -800,6 +888,19 @@ export class GameView {
     }
 
     this.createSnowfall();
+  }
+
+  private updatePickupVisuals(state: RiderState): void {
+    for (const pickup of this.coinVisuals) {
+      pickup.object.visible = !state.collectedCoins.includes(pickup.id);
+      pickup.object.position.y = pickup.baseY + Math.sin(this.elapsedVisual * 3.5 + pickup.phase) * .16;
+      pickup.object.rotation.y = pickup.heading + this.elapsedVisual * 2.2;
+    }
+    for (const pickup of this.boxVisuals) {
+      pickup.object.visible = !state.collectedBoxes.includes(pickup.id);
+      pickup.object.position.y = pickup.baseY + (Math.sin(this.elapsedVisual * 2.4 + pickup.phase) + 1) * .08;
+      pickup.object.rotation.y = pickup.heading + Math.sin(this.elapsedVisual * 1.7 + pickup.phase) * .08;
+    }
   }
 
   private placeCourseDecoration(object: THREE.Object3D, s: number, lateral: number, yOffset = 0): void {

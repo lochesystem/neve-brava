@@ -117,6 +117,7 @@ export class InputManager {
         spinRight: buttons.has(5),
         flipHeld: buttons.has(3),
         recoverHeld: buttons.has(1),
+        itemPressed: justPressed(11),
       };
     } else if (this.devFallback) {
       intent = this.keyboardIntent();
@@ -168,6 +169,7 @@ export class InputManager {
       spinRight: this.keys.has("e"),
       flipHeld: this.keys.has("c"),
       recoverHeld: this.keys.has("x"),
+      itemPressed: this.pressedKeys.has("r"),
     };
   }
 

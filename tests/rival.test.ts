@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, courseHeight, setActiveCourse } from "../src/core/course.ts";
 import {
-  createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
+  applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
 } from "../src/core/rival.ts";
 
 afterEach(() => setActiveCourse(COURSES[0].id));
@@ -90,5 +90,14 @@ describe("rivais", () => {
     expect(Math.abs(yeti.x - guy.x)).toBeGreaterThan(.2);
     expect(yeti.contactCooldown).toBeGreaterThan(0);
     expect(guy.contactCooldown).toBeGreaterThan(0);
+  });
+
+  it("reage ao tiro de vento perdendo velocidade e saindo da linha", () => {
+    const yeti = createRival(YETI_PROFILE);
+    const speed = yeti.speed;
+    applyWindHit(yeti);
+    expect(yeti.speed).toBeLessThan(speed);
+    expect(Math.abs(yeti.lateralSpeed)).toBeGreaterThan(7);
+    expect(yeti.windHit).toBeGreaterThan(0);
   });
 });

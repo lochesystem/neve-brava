@@ -31,6 +31,7 @@ http://127.0.0.1:5173/?dev=1
 | Giro | L1/R1 | Q/E |
 | Flip | △ | C |
 | Preparar pouso | ○ | X |
+| Usar item | R3 | R |
 | Pausa | Options | Esc |
 
 ## Gates
@@ -54,6 +55,7 @@ npm run check
 - navegação completa por DualSense e gate de compatibilidade;
 - gatilhos analógicos, deadzone radial e rumble com capability detection;
 - áudio procedural de vento e feedback, iniciado somente após gesto;
+- moedas de 100 créditos, caixas de armas por 200 e itens de vento, turbo e escudo;
 - perfis Alta, Média e Performance;
 - simulação em passo fixo de 60 Hz e regras críticas headless.
 
