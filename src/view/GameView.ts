@@ -647,7 +647,7 @@ export class GameView {
         const orientedModel = new THREE.Group();
         // A pose da Giru traz uma torção própria no arquivo. Compensa o eixo
         // para que, vista pela câmera da largada, ela aponte ao centro da pista.
-        orientedModel.rotation.y = Math.PI * .575;
+        orientedModel.rotation.y = Math.PI * .825;
         orientedModel.add(model);
         this.registerCharacterModel("giru", orientedModel);
       },
