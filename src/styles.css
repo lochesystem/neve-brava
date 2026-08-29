@@ -268,6 +268,8 @@ button span { margin-right: 8px; }
 #course-map-marker path { fill: var(--paper); }
 #course-map-rival circle { fill: #8d63c7; stroke: var(--ink); stroke-width: 3; filter: drop-shadow(0 3px 0 rgba(37,51,72,.3)); }
 #course-map-rival path { fill: white; stroke: var(--ink); stroke-width: 1.5; }
+#course-map-guy circle { fill: #35aebe; stroke: var(--ink); stroke-width: 3; filter: drop-shadow(0 3px 0 rgba(37,51,72,.3)); }
+#course-map-guy path { fill: var(--yellow); stroke: var(--ink); stroke-width: 1.5; }
 .map-finish { fill: var(--ink); }
 .course-minimap footer { position: absolute; top: 57px; right: 7px; bottom: 8px; display: flex; flex-direction: column; align-items: end; justify-content: space-between; font: 900 8px "Barlow Condensed",sans-serif; letter-spacing: .12em; opacity: .62; }
 .toast { position: absolute; left: 50%; top: 26%; transform: translate(-50%,-50%) rotate(-2deg); padding: 8px 20px; color: white; background: var(--ink); font: italic 900 30px "Barlow Condensed"; opacity: 0; transition: opacity .15s, transform .15s; }

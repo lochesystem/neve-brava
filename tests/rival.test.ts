@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, courseHeight, setActiveCourse } from "../src/core/course.ts";
-import { createRival, interpolateRival, updateRival } from "../src/core/rival.ts";
+import {
+  createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
+} from "../src/core/rival.ts";
 
 afterEach(() => setActiveCourse(COURSES[0].id));
 
-describe("rival yeti", () => {
+describe("rivais", () => {
   it("desce com decisões suaves e permanece dentro da pista", () => {
     const rival = createRival();
     let maximumStep = 0;
@@ -25,15 +27,17 @@ describe("rival yeti", () => {
   it("conclui as quatro pistas sem ficar preso em obstáculos", () => {
     for (const course of COURSES) {
       setActiveCourse(course.id);
-      const rival = createRival();
-      let finishEvents = 0;
-      for (let index = 0; index < 8_000 && !rival.finished; index += 1) {
-        finishEvents += updateRival(rival, rival.s, 0, 1 / 60).filter(event => event.type === "RIVAL_FINISH").length;
+      for (const profile of [YETI_PROFILE, GUY_PROFILE]) {
+        const rival = createRival(profile);
+        let finishEvents = 0;
+        for (let index = 0; index < 8_000 && !rival.finished; index += 1) {
+          finishEvents += updateRival(rival, rival.s, 0, 1 / 60).filter(event => event.type === "RIVAL_FINISH").length;
+        }
+        expect(rival.s).toBe(COURSE_LENGTH);
+        expect(rival.finished).toBe(true);
+        expect(rival.finishTime).toBeGreaterThan(45);
+        expect(finishEvents).toBe(1);
       }
-      expect(rival.s).toBe(COURSE_LENGTH);
-      expect(rival.finished).toBe(true);
-      expect(rival.finishTime).toBeGreaterThan(45);
-      expect(finishEvents).toBe(1);
     }
   });
 
@@ -54,5 +58,28 @@ describe("rival yeti", () => {
     expect(half.s).toBe(5);
     expect(half.x).toBeCloseTo(-.45);
     expect(half.heading).toBeCloseTo(.2);
+  });
+
+  it("dá ao Guy uma linha diferente da linha do Yeti", () => {
+    const yeti = createRival(YETI_PROFILE);
+    const guy = createRival(GUY_PROFILE);
+    for (let index = 0; index < 1_200; index += 1) {
+      updateRival(yeti, 300, 0, 1 / 60);
+      updateRival(guy, 300, 0, 1 / 60);
+    }
+    expect(guy.name).toBe("GUY");
+    expect(yeti.name).toBe("YETI");
+    expect(Math.abs(guy.x - yeti.x)).toBeGreaterThan(.5);
+  });
+
+  it("separa adversários quando eles disputam a mesma linha", () => {
+    const yeti = createRival(YETI_PROFILE);
+    const guy = createRival(GUY_PROFILE);
+    guy.x = yeti.x + .2;
+    guy.s = yeti.s + .2;
+    expect(resolveRivalContact(yeti, guy)).toBe(true);
+    expect(Math.abs(yeti.x - guy.x)).toBeGreaterThan(.2);
+    expect(yeti.contactCooldown).toBeGreaterThan(0);
+    expect(guy.contactCooldown).toBeGreaterThan(0);
   });
 });

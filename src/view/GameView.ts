@@ -400,12 +400,18 @@ export class GameView {
   private riderVisual = createRiderModel();
   private rival = new THREE.Group();
   private rivalVisual = createRiderModel();
+  private guy = new THREE.Group();
+  private guyVisual = createRiderModel();
   private contactShadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.82, 20),
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.24, depthWrite: false }),
   );
   private rivalShadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.9, 20),
+    new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
+  );
+  private guyShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.86, 20),
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
   );
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
@@ -441,11 +447,15 @@ export class GameView {
     this.riderTumblePivot.add(this.riderVisual);
     this.rider.add(this.riderTumblePivot);
     this.rival.add(this.rivalVisual);
+    this.guy.add(this.guyVisual);
     this.rivalShadow.rotation.x = -Math.PI / 2;
     this.rivalShadow.scale.set(1.9, .7, 1);
-    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.debugLines);
+    this.guyShadow.rotation.x = -Math.PI / 2;
+    this.guyShadow.scale.set(1.8, .66, 1);
+    this.scene.add(this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
+    this.loadGuyModel();
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
@@ -512,6 +522,35 @@ export class GameView {
     );
   }
 
+  private loadGuyModel(): void {
+    new GLTFLoader().load(
+      `${import.meta.env.BASE_URL}models/guy-main.glb`,
+      gltf => {
+        const model = gltf.scene;
+        const bounds = new THREE.Box3().setFromObject(model);
+        const center = bounds.getCenter(new THREE.Vector3());
+        const height = Math.max(.001, bounds.max.y - bounds.min.y);
+        const scale = 2.5 / height;
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+        model.traverse(object => {
+          if (!(object instanceof THREE.Mesh)) return;
+          object.castShadow = true;
+          object.receiveShadow = true;
+        });
+        const orientedModel = new THREE.Group();
+        // Os personagens gerados pelo Tripo compartilham o mesmo eixo diagonal.
+        orientedModel.rotation.y = Math.PI * .625;
+        orientedModel.add(model);
+        this.guyVisual.clear();
+        this.guyVisual.scale.setScalar(1);
+        this.guyVisual.add(orientedModel);
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar o Guy rival; mantendo o placeholder.", error),
+    );
+  }
+
   setQuality(quality: Quality): void {
     this.quality = quality;
     const dpr = quality === "high" ? 1.75 : quality === "medium" ? 1.35 : 1;
@@ -538,7 +577,7 @@ export class GameView {
     this.createWorld();
   }
 
-  render(state: RiderState, rivalState: RivalState, look: number, dt: number): void {
+  render(state: RiderState, rivalState: RivalState, guyState: RivalState, look: number, dt: number): void {
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
@@ -608,33 +647,34 @@ export class GameView {
       backwards.z += frame.nz * side * (1.4 + Math.abs(state.carve) * 3);
       this.spawnParticle(origin, PALETTE.snow, 0.13 + Math.random() * 0.1, 0.5, backwards);
     }
-    this.updateRival(rivalState, dt);
+    this.updateOpponent(rivalState, this.rival, this.rivalVisual, this.rivalShadow, dt);
+    this.updateOpponent(guyState, this.guy, this.guyVisual, this.guyShadow, dt);
     this.renderer.render(this.scene, this.camera);
   }
 
-  private updateRival(state: RivalState, dt: number): void {
+  private updateOpponent(state: RivalState, group: THREE.Group, visual: THREE.Group, shadow: THREE.Mesh, dt: number): void {
     const world = courseWorldPoint(state.s, state.x);
     const frame = courseFrame(state.s);
     const groundY = courseTerrainHeight(state.s, state.x);
     const surfaceOffset = Math.max(0, state.y - courseHeight(state.s) - .52);
-    this.rival.visible = state.s < COURSE_LENGTH + 4;
+    group.visible = state.s < COURSE_LENGTH + 4;
     // Usa o relevo lateral real, não apenas a altura da linha central. O pequeno
     // encaixe evita a fresta entre a base da prancha e a neve.
-    this.rival.position.set(world.x, groundY + surfaceOffset - .035, world.z);
-    this.rival.rotation.set(
+    group.position.set(world.x, groundY + surfaceOffset - .035, world.z);
+    group.rotation.set(
       state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
       frame.heading + state.heading + (state.grounded ? 0 : state.spin * clamp(state.airTime / .9, 0, 1)),
       state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : -state.carve * .27,
     );
     const pump = state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
-    this.rivalVisual.position.y = -pump;
-    this.rivalVisual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
+    visual.position.y = -pump;
+    visual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
     const airGap = Math.max(0, surfaceOffset);
-    this.rivalShadow.position.set(world.x, groundY + .04, world.z);
-    const material = this.rivalShadow.material as THREE.MeshBasicMaterial;
+    shadow.position.set(world.x, groundY + .04, world.z);
+    const material = shadow.material as THREE.MeshBasicMaterial;
     material.opacity = clamp(.2 - airGap * .03, .025, .2);
     const scale = clamp(1 - airGap * .035, .55, 1);
-    this.rivalShadow.scale.set(1.9 * scale, .7 * scale, 1);
+    shadow.scale.set((state.id === "yeti" ? 1.9 : 1.8) * scale, (state.id === "yeti" ? .7 : .66) * scale, 1);
 
     if (state.grounded && state.speed > 15 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
       const origin = new THREE.Vector3(world.x, groundY + .12, world.z);

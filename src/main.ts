@@ -4,7 +4,10 @@ import {
   type CourseDefinition,
 } from "./core/course.ts";
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
-import { createRival, interpolateRival, resolveRiderContact, updateRival, type RivalEvent, type RivalState } from "./core/rival.ts";
+import {
+  createRival, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
+  updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
+} from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
 import { AudioManager } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
@@ -27,8 +30,10 @@ const $ = <T extends HTMLElement>(selector: string): T => document.querySelector
 
 let state: RiderState = createRider();
 let previousRider: RiderState = { ...state };
-let rival: RivalState = createRival();
+let rival: RivalState = createRival(YETI_PROFILE);
 let previousRival: RivalState = { ...rival };
+let guy: RivalState = createRival(GUY_PROFILE);
+let previousGuy: RivalState = { ...guy };
 let screen: Screen = "title";
 let settingsReturn: Screen = "title";
 let selectedCourseIndex = 0;
@@ -58,6 +63,7 @@ const mapLine = document.querySelector<SVGPathElement>("#course-map-line")!;
 const mapShadow = document.querySelector<SVGPathElement>("#course-map-shadow")!;
 const mapMarker = document.querySelector<SVGGElement>("#course-map-marker")!;
 const mapRival = document.querySelector<SVGGElement>("#course-map-rival")!;
+const mapGuy = document.querySelector<SVGGElement>("#course-map-guy")!;
 const mapStart = document.querySelector<SVGCircleElement>(".map-start")!;
 const mapFinish = document.querySelector<SVGPathElement>(".map-finish")!;
 
@@ -127,7 +133,9 @@ function markerTransform(progress: number, lateral: number, heading: number): st
 function updateMapMarker(): void {
   mapMarker.setAttribute("transform", markerTransform(state.s, state.x, state.heading));
   mapRival.setAttribute("transform", markerTransform(rival.s, rival.x, rival.heading));
-  $("#race-position").innerHTML = `${rival.s > state.s + .35 ? "2º" : "1º"} <i>/ 2</i>`;
+  mapGuy.setAttribute("transform", markerTransform(guy.s, guy.x, guy.heading));
+  const position = 1 + [rival, guy].filter(opponent => opponent.s > state.s + .35).length;
+  $("#race-position").innerHTML = `${position}º <i>/ 3</i>`;
 }
 
 function formatTime(seconds: number): string {
@@ -162,8 +170,10 @@ function startRun(): void {
   audio.start();
   state = createRider();
   previousRider = { ...state };
-  rival = createRival();
+  rival = createRival(YETI_PROFILE);
   previousRival = { ...rival };
+  guy = createRival(GUY_PROFILE);
+  previousGuy = { ...guy };
   accumulator = 0;
   countdown = 3.35;
   disconnectedPause = false;
@@ -200,19 +210,24 @@ function finish(): void {
   $("#result-trick").textContent = state.bestTrick;
   $("#result-near").textContent = String(state.nearMisses);
   $("#result-crashes").textContent = String(state.crashes);
-  const playerWon = !rival.finished || state.elapsed <= rival.finishTime;
-  const rivalProjectedTime = rival.finished ? rival.finishTime : rival.elapsed + (COURSE_LENGTH - rival.s) / Math.max(20, rival.speed);
-  const gap = Math.abs(rivalProjectedTime - state.elapsed);
-  $("#result-position").textContent = playerWon ? "1º" : "2º";
-  $("#result-rival").textContent = `${rivalProjectedTime >= state.elapsed ? "+" : "−"}${gap.toFixed(2)}s`;
+  const projectedTime = (opponent: RivalState) => opponent.finished
+    ? opponent.finishTime
+    : opponent.elapsed + (COURSE_LENGTH - opponent.s) / Math.max(20, opponent.speed);
+  const rivals = [rival, guy].map(opponent => ({ opponent, time: projectedTime(opponent) }));
+  const position = 1 + rivals.filter(entry => entry.time < state.elapsed).length;
+  $("#result-position").textContent = `${position}º`;
+  $("#result-rival").textContent = rivals.map(({ opponent, time }) => {
+    const gap = Math.abs(time - state.elapsed);
+    return `${opponent.name} ${time >= state.elapsed ? "+" : "−"}${gap.toFixed(2)}s`;
+  }).join(" · ");
   const finalCourse = selectedCourseIndex >= COURSES.length - 1;
   $("#next-track-button").textContent = finalCourse ? "✕ CONCLUIR CAMPANHA" : "✕ PRÓXIMA PISTA";
   showScreen("results");
 }
 
-function handleRivalEvent(event: RivalEvent): void {
-  if (event.type === "RIVAL_CRASH" && Math.abs(rival.s - state.s) < 55) showToast("YETI TOMBOU!", "near");
-  if (event.type === "RIVAL_FINISH" && !state.finished) showToast("YETI CHEGOU PRIMEIRO!", "crash");
+function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
+  if (event.type === "RIVAL_CRASH" && Math.abs(opponent.s - state.s) < 55) showToast(`${opponent.name} TOMBOU!`, "near");
+  if (event.type === "RIVAL_FINISH" && !state.finished) showToast(`${opponent.name} CHEGOU PRIMEIRO!`, "crash");
 }
 
 function handleEvent(event: GameEvent): void {
@@ -298,9 +313,14 @@ function frame(now: number): void {
         const stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false };
         previousRider = { ...state }; const progressBeforeStep = state.s;
         previousRival = { ...rival };
+        previousGuy = { ...guy };
         for (const event of updateRider(state, stepIntent, fixedStep)) handleEvent(event);
-        for (const event of updateRival(rival, state.s, state.x, fixedStep)) handleRivalEvent(event);
+        for (const event of updateRival(rival, state.s, state.x, fixedStep)) handleRivalEvent(event, rival);
+        const leader = rival.s > state.s ? rival : state;
+        for (const event of updateRival(guy, leader.s, leader.x, fixedStep)) handleRivalEvent(event, guy);
         if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
+        if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
+        resolveRivalContact(rival, guy);
         if (Math.abs(state.s - progressBeforeStep) > 5) previousRider = { ...state };
         accumulator -= fixedStep; firstStep = false;
       }
@@ -312,7 +332,8 @@ function frame(now: number): void {
   toastTimer -= dt; if (toastTimer <= 0) toast.classList.remove("show");
   const renderState = screen === "playing" && countdown <= 0 ? interpolateRider(previousRider, state, accumulator / fixedStep) : state;
   const renderRival = screen === "playing" && countdown <= 0 ? interpolateRival(previousRival, rival, accumulator / fixedStep) : rival;
-  view.render(renderState, renderRival, lastIntentLook, dt); requestAnimationFrame(frame);
+  const renderGuy = screen === "playing" && countdown <= 0 ? interpolateRival(previousGuy, guy, accumulator / fixedStep) : guy;
+  view.render(renderState, renderRival, renderGuy, lastIntentLook, dt); requestAnimationFrame(frame);
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);

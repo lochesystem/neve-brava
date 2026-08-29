@@ -18,6 +18,12 @@ export type RivalEvent =
   | { type: "RIVAL_FINISH" };
 
 export type RivalState = {
+  id: "yeti" | "guy";
+  name: string;
+  linePhase: number;
+  paceBias: number;
+  aggression: number;
+  rampAffinity: number;
   s: number;
   x: number;
   y: number;
@@ -41,14 +47,32 @@ export type RivalState = {
   contactCooldown: number;
 };
 
-export function createRival(): RivalState {
+export type RivalProfile = Pick<RivalState, "id" | "name" | "linePhase" | "paceBias" | "aggression" | "rampAffinity"> & {
+  startX: number;
+};
+
+export const YETI_PROFILE: RivalProfile = {
+  id: "yeti", name: "YETI", startX: 3.1, linePhase: 0, paceBias: .15, aggression: 1, rampAffinity: .8,
+};
+
+export const GUY_PROFILE: RivalProfile = {
+  id: "guy", name: "GUY", startX: -3.15, linePhase: 2.35, paceBias: -.1, aggression: .68, rampAffinity: 1.55,
+};
+
+export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
   return {
+    id: profile.id,
+    name: profile.name,
+    linePhase: profile.linePhase,
+    paceBias: profile.paceBias,
+    aggression: profile.aggression,
+    rampAffinity: profile.rampAffinity,
     s: 0,
-    x: 3.1,
+    x: profile.startX,
     y: courseHeight(0) + .52,
     speed: 18.5,
     lateralSpeed: 0,
-    targetX: 3.1,
+    targetX: profile.startX,
     decisionTimer: 0,
     grounded: true,
     verticalSpeed: 0,
@@ -76,10 +100,10 @@ function lineRisk(state: RivalState, candidate: number, preferredLine: number): 
     const clearance = Math.abs(candidate - obstacle.x) - obstacle.radius;
     if (clearance < 3.3) risk += (3.3 - clearance) * (2.25 - ahead / 105);
   }
-  // O yeti gosta de rampas, mas só muda de linha quando ainda existe aproximação.
+  // Cada perfil decide quanto vale abandonar a linha atual para buscar uma rampa.
   for (const ramp of RAMPS) {
     const ahead = ramp.s - state.s;
-    if (ahead > 14 && ahead < 72 && Math.abs(candidate - ramp.x) < ramp.width * .45) risk -= .55;
+    if (ahead > 14 && ahead < 72 && Math.abs(candidate - ramp.x) < ramp.width * .45) risk -= .55 * state.rampAffinity;
   }
   return risk;
 }
@@ -89,22 +113,23 @@ function chooseLine(state: RivalState, playerS: number, playerX: number): void {
   const candidates = [-.78, -.52, -.26, 0, .26, .52, .78].map(value => value * edge);
   const raceGap = playerS - state.s;
   const mountainLine = (
-    Math.sin(state.s * .027 + getActiveCourse().order * 1.4) * .48
-    + Math.sin(state.s * .011 + 2.3) * .2
+    Math.sin(state.s * .027 + getActiveCourse().order * 1.4 + state.linePhase) * .48
+    + Math.sin(state.s * .011 + 2.3 + state.linePhase * .55) * .2
   ) * edge;
   let preferredLine = mountainLine;
   if (raceGap > -3 && raceGap < 20) {
     // Atrás ou emparelhado: abre para o lado livre e prepara a ultrapassagem.
-    preferredLine = playerX >= 0 ? -edge * .66 : edge * .66;
+    const passingWidth = .48 + state.aggression * .18;
+    preferredLine = playerX >= 0 ? -edge * passingWidth : edge * passingWidth;
   } else if (raceGap <= -3 && raceGap > -18) {
     // Na frente: protege a linha sem perseguir o jogador como um ímã.
     const defendSide = Math.sign(playerX - state.x) || Math.sign(mountainLine) || 1;
-    preferredLine = clamp(playerX - defendSide * 2.6, -edge * .68, edge * .68);
+    preferredLine = clamp(playerX - defendSide * (1.3 + state.aggression * 1.3), -edge * .68, edge * .68);
   }
   state.targetX = candidates.reduce((best, candidate) =>
     lineRisk(state, candidate, preferredLine) < lineRisk(state, best, preferredLine) ? candidate : best,
   candidates[0]);
-  state.decisionTimer = .58 + (Math.sin(state.s * .11) + 1) * .18;
+  state.decisionTimer = .58 + (1 - state.aggression) * .22 + (Math.sin(state.s * .11 + state.linePhase) + 1) * .18;
 }
 
 function obstacleCollision(state: RivalState): boolean {
@@ -139,7 +164,7 @@ export function updateRival(state: RivalState, playerS: number, playerX: number,
   state.decisionTimer -= step;
   if (state.decisionTimer <= 0) chooseLine(state, playerS, playerX);
 
-  const coursePace = 43 + getActiveCourse().order * .3;
+  const coursePace = 43 + getActiveCourse().order * .3 + state.paceBias;
   const gap = playerS - state.s;
   const catchUp = clamp(gap * .18, -3.4, 3.4);
   const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * 1.15;
@@ -222,6 +247,22 @@ export function resolveRiderContact(rival: RivalState, rider: RiderState): boole
   rival.speed = sharedSpeed * .985;
   rider.speed = sharedSpeed * .975;
   rival.contactCooldown = .55;
+  return true;
+}
+
+export function resolveRivalContact(first: RivalState, second: RivalState): boolean {
+  if (first.contactCooldown > 0 || second.contactCooldown > 0 || first.stun > 0 || second.stun > 0 || !first.grounded || !second.grounded) return false;
+  if (Math.abs(first.s - second.s) > 1.7 || Math.abs(first.x - second.x) > 1.45) return false;
+  const side = Math.sign(first.x - second.x) || (Math.sin(first.s + first.linePhase) > 0 ? 1 : -1);
+  first.x += side * .25;
+  second.x -= side * .25;
+  first.lateralSpeed += side * 2.2;
+  second.lateralSpeed -= side * 2.2;
+  const sharedSpeed = (first.speed + second.speed) * .5;
+  first.speed = sharedSpeed * .99;
+  second.speed = sharedSpeed * .99;
+  first.contactCooldown = .5;
+  second.contactCooldown = .5;
   return true;
 }
 
