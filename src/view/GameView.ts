@@ -43,6 +43,14 @@ const PALETTE = {
   rock: 0x66758e,
 };
 
+// Compensa a altura da prancha dentro de cada GLB quando o modelo ocupa o
+// pivô do jogador. O Yeti tem mais espaço vazio abaixo da malha visível.
+const PLAYER_MODEL_Y_OFFSET: Record<CharacterId, number> = {
+  snowman: -.07,
+  yeti: -.34,
+  guy: -.155,
+};
+
 function toon(color: number, options: Partial<THREE.MeshToonMaterialParameters> = {}): THREE.MeshToonMaterial {
   return new THREE.MeshToonMaterial({ color, ...options });
 }
@@ -661,7 +669,7 @@ export class GameView {
       const template = this.characterModels.get(slot.id);
       if (!template) continue;
       const instance = template.clone(true);
-      if (slot.player) instance.position.y = slot.id === "yeti" ? -.21 : slot.id === "guy" ? -.155 : -.07;
+      if (slot.player) instance.position.y = PLAYER_MODEL_Y_OFFSET[slot.id];
       slot.visual.clear();
       slot.visual.scale.setScalar(1);
       slot.visual.add(instance);
