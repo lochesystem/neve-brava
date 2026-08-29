@@ -39,6 +39,11 @@ async function requestLandscape(): Promise<void> {
   try { await orientation.lock("landscape"); } catch { /* O aviso visual mantém retrato bloqueado. */ }
 }
 
+function requestMobileFullscreen(): void {
+  if (!input.touchEnabled || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+  void document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
+}
+
 function setupTitleSnow(): void {
   const field = $("#title-snow");
   for (let index = 0; index < 42; index += 1) {
@@ -278,6 +283,7 @@ function openCharacterSelect(): void {
 
 function startRun(): void {
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
+  requestMobileFullscreen();
   void requestLandscape();
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();

@@ -1,4 +1,4 @@
-const CACHE_NAME = "snow-rush-shell-v1";
+const CACHE_NAME = "snow-rush-shell-v2";
 const CORE_ASSETS = [
   "./",
   "./manifest.webmanifest",
