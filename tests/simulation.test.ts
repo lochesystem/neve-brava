@@ -43,6 +43,8 @@ describe("simulação da prancha", () => {
     expect(rider.grounded).toBe(true);
     expect(rider.heading).toBeCloseTo(0.08, 2);
     expect(Math.abs(rider.heading)).toBeLessThan(0.2);
+    expect(events.some(event => event.type === "LAND" && event.boost > 0)).toBe(true);
+    expect(rider.turboTime).toBeGreaterThan(0);
   });
 
   it("transforma pouso perdido em capotamento com impulso residual", () => {
@@ -160,28 +162,29 @@ describe("simulação da prancha", () => {
     expect(rider.collectedCoins).toContain(coin.id);
   });
 
-  it("compra uma arma por 200 créditos e equipa no único slot", () => {
+  it("coleta uma caixa sem gastar os créditos acumulados", () => {
     const box = ITEM_BOXES[0];
     const rider = createRider();
     rider.credits = 200;
     rider.s = box.s - .2; rider.x = box.x; rider.y = courseHeight(rider.s) + .46; rider.speed = 30;
     const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
-    expect(events).toContainEqual({ type: "ITEM_ACQUIRED", item: box.item, cost: 200 });
-    expect(rider.credits).toBe(0);
+    expect(events).toContainEqual({ type: "ITEM_ACQUIRED", item: box.item });
+    expect(rider.credits).toBe(200);
     expect(rider.item).toBe(box.item);
     expect(rider.recovering).toBe(0);
   });
 
-  it("transforma a caixa em obstáculo quando faltam créditos", () => {
+  it("coleta a caixa mesmo sem possuir créditos", () => {
     const box = ITEM_BOXES[0];
     const rider = createRider();
     rider.credits = 100;
     rider.s = box.s - .2; rider.x = box.x; rider.y = courseHeight(rider.s) + .46; rider.speed = 30;
     const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
-    expect(events).toContainEqual({ type: "ITEM_BOX_BLOCKED", item: box.item });
-    expect(events.some(event => event.type === "CRASH" && event.obstacle === "item-box")).toBe(true);
-    expect(rider.recovering).toBeGreaterThan(0);
-    expect(rider.collectedBoxes).not.toContain(box.id);
+    expect(events).toContainEqual({ type: "ITEM_ACQUIRED", item: box.item });
+    expect(events.some(event => event.type === "CRASH")).toBe(false);
+    expect(rider.recovering).toBe(0);
+    expect(rider.credits).toBe(100);
+    expect(rider.collectedBoxes).toContain(box.id);
   });
 
   it("ativa turbo e usa o escudo para absorver um obstáculo comum", () => {

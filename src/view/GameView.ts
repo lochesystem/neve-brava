@@ -30,6 +30,8 @@ type Particle = {
   maxLife: number;
 };
 
+type WindRing = { mesh: THREE.Mesh; life: number; maxLife: number; delay: number };
+
 type TrailSample = { s: number; x: number };
 
 type SnowTrail = {
@@ -56,6 +58,18 @@ const PALETTE = {
   lavender: 0xa58bdd,
   rock: 0x66758e,
 };
+
+function createWindTargetMarker(): THREE.Group {
+  const marker = new THREE.Group();
+  const material = new THREE.MeshBasicMaterial({ color: 0x9fe7ff, transparent: true, opacity: .68, depthWrite: false, depthTest: false });
+  const outer = new THREE.Mesh(new THREE.TorusGeometry(1.18, .055, 6, 34, Math.PI * 1.65), material);
+  const inner = new THREE.Mesh(new THREE.TorusGeometry(.82, .035, 5, 28), material.clone());
+  inner.rotation.z = Math.PI;
+  marker.add(outer, inner);
+  marker.visible = false;
+  marker.renderOrder = 30;
+  return marker;
+}
 
 // Compensa a altura da prancha dentro de cada GLB quando o modelo ocupa o
 // pivô do jogador. O Yeti tem mais espaço vazio abaixo da malha visível.
@@ -493,6 +507,7 @@ export class GameView {
   private itemBoxModel: THREE.Group | null = null;
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
+  private windRings: WindRing[] = [];
   private snowTrails = new THREE.Group();
   private riderTrail: SnowTrail;
   private rivalTrail: SnowTrail;
@@ -518,6 +533,7 @@ export class GameView {
     new THREE.TorusGeometry(1.28, .12, 7, 30),
     new THREE.MeshBasicMaterial({ color: PALETTE.yellow, transparent: true, opacity: .92, depthWrite: false }),
   );
+  private windTargetMarker = createWindTargetMarker();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.riderTrail = this.createSnowTrail();
@@ -556,7 +572,7 @@ export class GameView {
     this.giruShadow.scale.set(1.8, .66, 1);
     this.selectionRing.rotation.x = -Math.PI / 2;
     this.selectionRing.visible = false;
-    this.scene.add(this.snowTrails, this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.debugLines);
+    this.scene.add(this.snowTrails, this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.windTargetMarker, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
     this.loadGuyModel();
@@ -786,7 +802,7 @@ export class GameView {
     this.createWorld();
   }
 
-  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, look: number, dt: number): void {
+  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, windTargetId: CharacterId | null, look: number, dt: number): void {
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
@@ -839,6 +855,7 @@ export class GameView {
     this.updateCamera(state, dt);
     this.updateSky(dt);
     this.updateParticles(dt);
+    this.updateWindRings(dt);
     this.updateSnowfall(state, dt);
     this.updatePickupVisuals(state);
     this.updateSnowTrail(this.riderTrail, state.s, state.x, state.grounded && state.recovering <= 0, state.speed, state.carve);
@@ -877,8 +894,68 @@ export class GameView {
     this.updateOpponent(rivalState, this.rival, this.rivalVisual, this.rivalShadow, dt);
     this.updateOpponent(guyState, this.guy, this.guyVisual, this.guyShadow, dt);
     this.updateOpponent(giruState, this.giru, this.giruVisual, this.giruShadow, dt);
+    this.updateWindTarget(windTargetId, rivalState, guyState, giruState);
     this.updateSelectionRing(state, rivalState, guyState, giruState);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  windShot(rider: RiderState, target: RivalState): void {
+    const startWorld = courseWorldPoint(rider.s, rider.x);
+    const endWorld = courseWorldPoint(target.s, target.x);
+    const start = new THREE.Vector3(startWorld.x, rider.y + .75, startWorld.z);
+    const end = new THREE.Vector3(endWorld.x, target.y + 1.05, endWorld.z);
+    const direction = end.clone().sub(start).normalize();
+    const orientation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
+    for (let index = 0; index < 7; index += 1) {
+      const material = new THREE.MeshBasicMaterial({ color: index % 2 ? 0xcdf3ff : 0x73bce3, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(new THREE.TorusGeometry(.34 + index * .055, .045, 6, 26), material);
+      mesh.position.lerpVectors(start, end, .12 + index * .12);
+      mesh.quaternion.copy(orientation);
+      mesh.renderOrder = 18;
+      this.scene.add(mesh);
+      const delay = index * .025;
+      this.windRings.push({ mesh, life: .46 + delay, maxLife: .46, delay });
+    }
+    for (let index = 0; index < 16; index += 1) {
+      const origin = start.clone().lerp(end, Math.random() * .7);
+      const velocity = direction.clone().multiplyScalar(24 + Math.random() * 14);
+      velocity.x += (Math.random() - .5) * 2.5;
+      velocity.y += (Math.random() - .5) * 2.5;
+      velocity.z += (Math.random() - .5) * 2.5;
+      this.spawnParticle(origin, index % 3 ? 0xcdf3ff : 0x73bce3, .1 + Math.random() * .09, .34, velocity);
+    }
+  }
+
+  private updateWindRings(dt: number): void {
+    for (let index = this.windRings.length - 1; index >= 0; index -= 1) {
+      const ring = this.windRings[index];
+      ring.life -= dt;
+      if (ring.delay > 0) {
+        ring.delay -= dt;
+        continue;
+      }
+      const progress = clamp(1 - ring.life / ring.maxLife, 0, 1);
+      ring.mesh.scale.setScalar(.7 + progress * 2.2);
+      (ring.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - progress) * .68;
+      if (ring.life <= 0) {
+        this.scene.remove(ring.mesh);
+        ring.mesh.geometry.dispose();
+        (ring.mesh.material as THREE.Material).dispose();
+        this.windRings.splice(index, 1);
+      }
+    }
+  }
+
+  private updateWindTarget(id: CharacterId | null, first: RivalState, second: RivalState, third: RivalState): void {
+    const target = id ? [first, second, third].find(opponent => opponent.id === id) : null;
+    this.windTargetMarker.visible = Boolean(target);
+    if (!target) return;
+    const world = courseWorldPoint(target.s, target.x);
+    this.windTargetMarker.position.set(world.x, target.y + 1.28, world.z);
+    this.windTargetMarker.quaternion.copy(this.camera.quaternion);
+    this.windTargetMarker.rotateZ(this.elapsedVisual * .42);
+    const pulse = 1 + Math.sin(this.elapsedVisual * 6.5) * .08;
+    this.windTargetMarker.scale.setScalar(pulse);
   }
 
   private createSnowTrail(): SnowTrail {
@@ -1480,24 +1557,25 @@ export class GameView {
 
   private updateCamera(state: RiderState, dt: number): void {
     const speedFactor = clamp((state.speed - 12) / 30, 0, 1);
+    const boostFactor = state.turboTime > 0 ? clamp(state.turboTime / .28, 0, 1) : 0;
     const world = courseWorldPoint(state.s, state.x);
     const frame = courseFrame(state.s);
-    const behind = 7.6 + speedFactor * 3.2;
-    const cameraY = state.y + 3.1 + (state.grounded ? 0 : 1.15);
+    const behind = 5.65 + speedFactor * .9 + boostFactor * .45;
+    const cameraY = state.y + 2.55 + (state.grounded ? 0 : 1) + Math.sin(this.elapsedVisual * 36) * .025 * boostFactor;
     const desired = new THREE.Vector3(
-      world.x - frame.tx * behind + frame.nx * this.lookOffset,
+      world.x - frame.tx * behind + frame.nx * (this.lookOffset + Math.sin(this.elapsedVisual * 43) * .045 * boostFactor),
       cameraY,
       world.z - frame.tz * behind + frame.nz * this.lookOffset,
     );
     this.camera.position.lerp(desired, dampAlpha(state.recovering > 0 ? 9 : 4.8, dt));
-    const focusDistance = 16 + speedFactor * 22;
+    const focusDistance = 14 + speedFactor * 14 + boostFactor * 3;
     const focus = new THREE.Vector3(
       world.x + frame.tx * focusDistance + frame.nx * this.lookOffset * 0.25,
       state.y + 0.85,
       world.z + frame.tz * focusDistance + frame.nz * this.lookOffset * 0.25,
     );
     this.camera.lookAt(focus);
-    this.camera.fov += (60 + speedFactor * 25 - this.camera.fov) * dampAlpha(4.8, dt);
+    this.camera.fov += (56 + speedFactor * 10 + boostFactor * 4 - this.camera.fov) * dampAlpha(boostFactor > 0 ? 9 : 4.8, dt);
     this.camera.updateProjectionMatrix();
     this.sun.position.set(world.x - 65, state.y + 110, world.z + 35);
     this.sunTarget.position.set(world.x, state.y, world.z);

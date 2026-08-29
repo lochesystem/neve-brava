@@ -111,16 +111,17 @@ export class AudioManager {
       SECTION: [440, 660, 0.18],
       COIN: [720, 1_180, .1],
       ITEM_ACQUIRED: [360, 920, .2],
-      ITEM_BOX_BLOCKED: [120, 62, .2],
       ITEM_USED: [280, 1_080, .24],
       SHIELD_BREAK: [980, 260, .24],
       FINISH: [520, 1_040, 0.38],
     };
-    const profile = profiles[event.type];
+    const profile = event.type === "ITEM_USED" && event.item === "wind"
+      ? [760, 105, .32] as [number, number, number]
+      : profiles[event.type];
     if (!profile) return;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
-    oscillator.type = event.type === "CRASH" ? "sawtooth" : "triangle";
+    oscillator.type = event.type === "CRASH" || (event.type === "ITEM_USED" && event.item === "wind") ? "sawtooth" : "triangle";
     oscillator.frequency.setValueAtTime(profile[0], this.context.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(profile[1], this.context.currentTime + profile[2]);
     gain.gain.setValueAtTime(0.0001, this.context.currentTime);

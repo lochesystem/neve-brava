@@ -9,7 +9,7 @@ describe("pista", () => {
     expect(COINS).toHaveLength(24);
     expect(ITEM_BOXES).toHaveLength(9);
     expect(COINS.every(coin => coin.value === 100)).toBe(true);
-    expect(ITEM_BOXES.every(box => box.cost === 200)).toBe(true);
+    expect(ITEM_BOXES.every(box => !("cost" in box))).toBe(true);
     expect(validateCourse()).toEqual([]);
   });
 

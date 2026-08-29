@@ -165,14 +165,21 @@ function obstacleCollision(state: RivalState): boolean {
     || ITEM_BOXES.some(box => Math.abs(box.s - state.s) < 1.15 && Math.abs(box.x - state.x) < box.radius + .72);
 }
 
-export function applyWindHit(state: RivalState): void {
-  if (state.finished || state.stun > 0) return;
+export function applyWindHit(state: RivalState): boolean {
+  if (state.finished || state.stun > 0) return false;
   const direction = Math.sign(state.x) || (Math.sin(state.s + state.linePhase) > 0 ? 1 : -1);
-  state.windHit = .72;
-  state.speed *= .78;
-  state.lateralSpeed += direction * 7.5;
-  state.targetX = clamp(state.x + direction * 5.5, -COURSE_HALF_WIDTH + 1.4, COURSE_HALF_WIDTH - 1.4);
-  state.decisionTimer = .8;
+  state.windHit = 1.05;
+  state.stun = 1.05;
+  state.tumble = .01;
+  state.crashes += 1;
+  state.grounded = false;
+  state.verticalSpeed = 3.4;
+  state.speed = Math.max(16, state.speed * .68);
+  state.lateralSpeed += direction * 10.5;
+  state.targetX = clamp(state.x + direction * 6.5, -COURSE_HALF_WIDTH + 1.4, COURSE_HALF_WIDTH - 1.4);
+  state.decisionTimer = 1.1;
+  state.contactCooldown = 1.2;
+  return true;
 }
 
 export function updateRival(state: RivalState, playerS: number, playerX: number, dt: number): RivalEvent[] {

@@ -5,7 +5,7 @@ export type ItemKind = "wind" | "turbo" | "shield";
 export type Obstacle = { id: string; kind: ObstacleKind; s: number; x: number; radius: number; height: number; accent?: boolean; decorative?: boolean };
 export type Ramp = { id: string; s: number; x: number; width: number; launch: number; built: boolean };
 export type CoinPickup = { id: string; s: number; x: number; value: 100 };
-export type ItemBox = { id: string; s: number; x: number; item: ItemKind; cost: 200; radius: number; height: number };
+export type ItemBox = { id: string; s: number; x: number; item: ItemKind; radius: number; height: number };
 export type CourseSection = { start: number; end: number; name: string; color: string };
 type Wave = { amplitude: number; frequency: number; phase: number };
 
@@ -192,7 +192,6 @@ function generatePickups(course: CourseDefinition): { coins: CoinPickup[]; boxes
       s,
       x: safePickupX(course, s, preferred, 1.15),
       item: itemOrder[(index + course.order - 1) % itemOrder.length],
-      cost: 200,
       radius: 1.05,
       height: 2.1,
     });

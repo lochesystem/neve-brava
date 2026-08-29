@@ -105,6 +105,10 @@ const creditsLabel = $("#credits");
 const itemNameLabel = $("#item-name");
 const itemIconLabel = $("#item-icon");
 const itemHud = $("#item-hud");
+const boostFx = $("#boost-fx");
+const windTargetHud = $("#wind-target-hud");
+const windTargetName = $("#wind-target-name");
+const windTargetDistance = $("#wind-target-distance");
 const toast = $("#toast");
 const countdownLabel = $("#countdown");
 const startButton = $("#start-button") as HTMLButtonElement;
@@ -188,9 +192,8 @@ function renderTrackCards(): void {
     </button>`).join("");
   grid.querySelectorAll<HTMLButtonElement>("[data-track-index]").forEach(button => button.addEventListener("click", () => {
     selectedCourseIndex = Number(button.dataset.trackIndex);
-    renderTrackCards();
     updateSelectedCourseCopy();
-    window.setTimeout(() => grid.querySelector<HTMLButtonElement>(`[data-track-index="${selectedCourseIndex}"]`)?.focus(), 0);
+    openCharacterSelect();
   }));
 }
 
@@ -279,10 +282,11 @@ function openCharacterSelect(): void {
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
   state = createRider(); previousRider = { ...state };
-  rival = createOpponent("yeti", 3.1); previousRival = { ...rival };
-  guy = createOpponent("guy", -3.15); previousGuy = { ...guy };
-  giru = createOpponent("giru", 7.4); previousGiru = { ...giru };
-  view.setRacerCharacters("snowman", "yeti", "guy", "giru");
+  const opponents = CHARACTERS.map(character => character.id).filter(character => character !== selectedCharacter);
+  rival = createOpponent(opponents[0], 3.1); previousRival = { ...rival };
+  guy = createOpponent(opponents[1], -3.15); previousGuy = { ...guy };
+  giru = createOpponent(opponents[2], 7.4); previousGiru = { ...giru };
+  view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   view.setSelectionMode(true);
   $("#character-course").textContent = `${course.name} · ETAPA ${String(course.order).padStart(2, "0")}`;
   updateCharacterSelection();
@@ -366,12 +370,21 @@ function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
   if (event.type === "RIVAL_FINISH" && !state.finished) showToast(`${opponent.name} CHEGOU PRIMEIRO!`, "crash");
 }
 
+const WIND_RANGE = 74;
+function findWindTarget(): { opponent: RivalState; distance: number } | null {
+  return [rival, guy, giru]
+    .filter(opponent => !opponent.finished && opponent.stun <= 0 && opponent.s >= state.s - 5)
+    .map(opponent => ({ opponent, distance: Math.hypot(opponent.s - state.s, (opponent.x - state.x) * 1.35) }))
+    .filter(candidate => candidate.distance <= WIND_RANGE)
+    .sort((first, second) => first.distance - second.distance)[0] ?? null;
+}
+
 function handleEvent(event: GameEvent): void {
   view.event(event, state); audio.event(event);
   if (event.type === "TAKEOFF") input.pulse(.18, .52, 85);
   if (event.type === "LAND") {
     input.pulse(event.grade === "clean" ? .38 : .65, .42, event.grade === "clean" ? 110 : 170);
-    showToast(event.grade === "crash" ? "POUSO PERDIDO" : `${event.label}  +${event.points}`, event.grade === "clean" ? "clean" : event.grade === "crash" ? "crash" : "");
+    showToast(event.grade === "crash" ? "POUSO PERDIDO" : event.boost > 0 ? `${event.label}  ·  BOOST!` : `${event.label}  +${event.points}`, event.grade === "clean" ? "clean" : event.grade === "crash" ? "crash" : "");
   }
   if (event.type === "NEAR_MISS") { input.pulse(.12, .68, 70); showToast(`POR UM FIO  +${event.points}`, "near"); }
   if (event.type === "COIN") { input.pulse(.08, .22, 42, 20); showToast(`MOEDA  +${event.value}`, "coin"); }
@@ -382,17 +395,18 @@ function handleEvent(event: GameEvent): void {
   if (event.type === "ITEM_USED") {
     input.pulse(event.item === "turbo" ? .7 : .35, .65, event.item === "turbo" ? 220 : 140);
     if (event.item === "wind") {
-      const target = [rival, guy, giru]
-        .filter(opponent => opponent.s >= state.s - 4 && opponent.s - state.s <= 100 && !opponent.finished)
-        .sort((first, second) => Math.abs(first.s - state.s) - Math.abs(second.s - state.s))[0];
-      if (target) { applyWindHit(target); showToast(`VENTANIA NO ${target.name}!`, "wind"); }
-      else showToast("TIRO DE VENTO!", "wind");
+      const target = findWindTarget()?.opponent;
+      if (target && applyWindHit(target)) {
+        view.windShot(state, target);
+        input.pulse(.72, .88, 250);
+        showToast(`RAJADA NO ${target.name}!`, "wind");
+      }
     } else showToast(event.item === "turbo" ? "TURBO!" : "ESCUDO ATIVO!", event.item === "turbo" ? "coin" : "clean");
   }
   if (event.type === "SHIELD_BREAK") { input.pulse(.55, .8, 180); showToast("ESCUDO SALVOU!", "clean"); }
   if (event.type === "CRASH") {
     input.pulse(1, .7, 260);
-    showToast(event.obstacle === "item-box" ? "SEM 200 · CAIXA DERRUBOU!" : "TUMBOU!", "crash");
+    showToast("TUMBOU!", "crash");
   }
   if (event.type === "SECTION") showToast(event.name.toUpperCase(), "clean");
   if (event.type === "FINISH") { input.pulse(.45, .8, 420); window.setTimeout(finish, 500); }
@@ -418,6 +432,13 @@ function updateHud(force = false): void {
   itemIconLabel.textContent = activeItem ? itemIcons[activeItem] : "—";
   itemHud.dataset.item = activeItem ?? "empty";
   itemHud.classList.toggle("active", Boolean(state.item));
+  boostFx.classList.toggle("active", state.turboTime > 0);
+  const target = state.item === "wind" ? findWindTarget() : null;
+  windTargetHud.classList.toggle("hidden", !target);
+  if (target) {
+    windTargetName.textContent = `ALVO · ${target.opponent.name}`;
+    windTargetDistance.textContent = `${Math.round(target.distance)} m`;
+  }
   updateMapMarker();
 }
 
@@ -442,7 +463,17 @@ function focusables(): HTMLElement[] {
 function focusFirst(): void {
   const items = focusables();
   document.querySelectorAll(".gamepad-focus").forEach(element => element.classList.remove("gamepad-focus"));
-  if (items[0]) { items[0].focus({ preventScroll: true }); items[0].classList.add("gamepad-focus"); }
+  const preferred = screen === "campaign"
+    ? document.querySelector<HTMLElement>(`[data-track-index="${selectedCourseIndex}"]`)
+    : screen === "character"
+      ? document.querySelector<HTMLElement>(`[data-character="${selectedCharacter}"]`)
+      : screen === "results"
+        ? $("#next-track-button")
+        : screen === "title"
+          ? $("#campaign-button")
+          : null;
+  const target = preferred && items.includes(preferred) ? preferred : items[0];
+  if (target) { target.focus({ preventScroll: true }); target.classList.add("gamepad-focus"); }
 }
 function navigateMenu(direction: MenuAction): void {
   const items = focusables(); if (!items.length) return;
@@ -495,7 +526,12 @@ function frame(now: number): void {
     } else {
       accumulator = Math.min(.25, accumulator + dt); let firstStep = true;
       while (accumulator >= fixedStep) {
-        const stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false, itemPressed: false };
+        let stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false, itemPressed: false };
+        if (stepIntent.itemPressed && state.item === "wind" && !findWindTarget()) {
+          stepIntent = { ...stepIntent, itemPressed: false };
+          input.pulse(.12, .18, 70);
+          showToast("SEM ALVO NO ALCANCE", "wind");
+        }
         previousRider = { ...state }; const progressBeforeStep = state.s;
         previousRival = { ...rival };
         previousGuy = { ...guy };
@@ -525,7 +561,7 @@ function frame(now: number): void {
   const renderRival = screen === "playing" && countdown <= 0 ? interpolateRival(previousRival, rival, accumulator / fixedStep) : rival;
   const renderGuy = screen === "playing" && countdown <= 0 ? interpolateRival(previousGuy, guy, accumulator / fixedStep) : guy;
   const renderGiru = screen === "playing" && countdown <= 0 ? interpolateRival(previousGiru, giru, accumulator / fixedStep) : giru;
-  view.render(renderState, renderRival, renderGuy, renderGiru, lastIntentLook, dt); requestAnimationFrame(frame);
+  view.render(renderState, renderRival, renderGuy, renderGiru, state.item === "wind" ? findWindTarget()?.opponent.id ?? null : null, lastIntentLook, dt); requestAnimationFrame(frame);
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);
@@ -547,7 +583,7 @@ $("#character-confirm-button").addEventListener("click", startRun);
 document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button => button.addEventListener("click", () => {
   selectedCharacter = button.dataset.character as CharacterId;
   updateCharacterSelection();
-  window.setTimeout(() => button.focus({ preventScroll: true }), 0);
+  startRun();
 }));
 $("#settings-button").addEventListener("click", openSettings);
 $("#pause-settings-button").addEventListener("click", openSettings);
@@ -557,7 +593,7 @@ $("#quit-button").addEventListener("click", openCampaign);
 $("#restart-button").addEventListener("click", startRun);
 $("#result-title-button").addEventListener("click", () => showScreen("title"));
 $("#next-track-button").addEventListener("click", () => {
-  if (selectedCourseIndex < COURSES.length - 1) { selectedCourseIndex += 1; openCharacterSelect(); } else { selectedCourseIndex = 0; openCampaign(); }
+  if (selectedCourseIndex < COURSES.length - 1) { selectedCourseIndex += 1; startRun(); } else { selectedCourseIndex = 0; openCampaign(); }
 });
 
 function safeStorageGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }

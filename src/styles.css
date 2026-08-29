@@ -448,6 +448,19 @@ button span { margin-right: 8px; }
 .toast.show { opacity: 1; transform: translate(-50%,-60%) rotate(-2deg) scale(1.08); }
 .toast.clean { background: #237b73; }.toast.crash { background: #a43e4c; }.toast.near { background: #cc7b25; }
 .toast.coin { background: #d88025; }.toast.wind { background: #427ca2; }
+.boost-fx { position: fixed; inset: -10%; z-index: 1; pointer-events: none; opacity: 0; overflow: hidden; transition: opacity .16s ease-out; background: radial-gradient(circle at 50% 55%,transparent 30%,rgba(255,201,79,.1) 58%,rgba(255,114,94,.36) 100%); mix-blend-mode: screen; }
+.boost-fx::before,.boost-fx::after { content: ""; position: absolute; inset: -35%; opacity: 0; transform: scale(.45); background: repeating-conic-gradient(from 2deg at 50% 55%,transparent 0 5deg,rgba(255,246,205,.65) 5.3deg 5.65deg,transparent 6deg 11deg); -webkit-mask-image: radial-gradient(circle at 50% 55%,transparent 0 24%,#000 42%,transparent 74%); mask-image: radial-gradient(circle at 50% 55%,transparent 0 24%,#000 42%,transparent 74%); }
+.boost-fx::after { filter: blur(4px); transform: rotate(5deg) scale(.55); }
+.boost-fx.active { opacity: 1; animation: boost-pulse .22s ease-out; }
+.boost-fx.active::before { opacity: .52; animation: boost-lines .42s linear infinite; }
+.boost-fx.active::after { opacity: .3; animation: boost-lines-soft .6s linear infinite reverse; }
+@keyframes boost-pulse { from { opacity: .2; filter: brightness(1.7); } to { opacity: 1; filter: brightness(1); } }
+@keyframes boost-lines { from { transform: scale(.42) rotate(0); } to { transform: scale(1.05) rotate(1.5deg); } }
+@keyframes boost-lines-soft { from { transform: scale(.5) rotate(4deg); } to { transform: scale(1.12) rotate(6deg); } }
+.wind-target-hud { position: absolute; z-index: 4; left: 50%; top: 18%; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 7px; align-items: center; transform: translateX(-50%) rotate(-1deg); padding: 5px 10px 5px 7px; color: white; background: rgba(37,51,72,.72); border: 1px solid rgba(205,232,250,.82); border-radius: 16px 5px 16px 5px; box-shadow: 0 0 18px rgba(115,188,227,.25); backdrop-filter: blur(4px); pointer-events: none; }
+.wind-target-hud span { grid-row: 1 / 3; color: #9fe7ff; font-size: 24px; line-height: 1; text-shadow: 0 0 9px #73bce3; }
+.wind-target-hud b { font-size: 10px; letter-spacing: .12em; }
+.wind-target-hud small { color: #cde8fa; font-size: 8px; }
 .countdown { position: absolute; inset: 0; display: grid; place-items: center; color: var(--yellow); -webkit-text-stroke: 3px var(--ink); text-shadow: 7px 8px 0 var(--ink); font: italic 900 min(28vw,220px) "Barlow Condensed"; }
 .dev-badge { position: absolute; right: 20px; bottom: 78px; padding: 5px 9px; background: #a43e4c; color: white; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 
@@ -547,6 +560,7 @@ button span { margin-right: 8px; }
   .mobile-mode #course-map { height: calc(100% - 28px); }
   .mobile-mode .course-minimap footer { display: none; }
   .mobile-mode .toast { top: 20%; padding: 5px 12px; font-size: 19px; }
+  .mobile-mode .wind-target-hud { top: 21%; transform: translateX(-50%) scale(.78) rotate(-1deg); }
   .mobile-mode .countdown { font-size: min(24vw,128px); }
   .mobile-mode .dev-badge { display: none !important; }
 
