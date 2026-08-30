@@ -644,6 +644,10 @@ export class GameView {
     new THREE.MeshBasicMaterial({ color: PALETTE.yellow, transparent: true, opacity: .92, depthWrite: false }),
   );
   private windTargetMarker = createWindTargetMarker();
+  private specialSnowball = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.35, 2),
+    toon(PALETTE.snow, { emissive: 0x8bc5df, emissiveIntensity: .08 }),
+  );
 
   constructor(private canvas: HTMLCanvasElement) {
     this.riderTrail = this.createSnowTrail();
@@ -689,7 +693,9 @@ export class GameView {
     this.giruShadow.scale.set(1.8, .66, 1);
     this.selectionRing.rotation.x = -Math.PI / 2;
     this.selectionRing.visible = false;
-    this.scene.add(this.snowTrails, this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.windTargetMarker, this.debugLines);
+    this.specialSnowball.visible = false;
+    this.specialSnowball.castShadow = true;
+    this.scene.add(this.snowTrails, this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.windTargetMarker, this.specialSnowball, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
     this.loadGuyModel();
@@ -1194,7 +1200,7 @@ export class GameView {
     this.updateCamera(state, 10);
   }
 
-  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, windTargetId: CharacterId | null, look: number, dt: number): void {
+  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, windTargetId: CharacterId | null, look: number, dt: number, snowball: { active: boolean; s: number; x: number }): void {
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
@@ -1251,6 +1257,7 @@ export class GameView {
     this.updateSky(dt);
     this.updateParticles(dt);
     this.updateWindRings(dt);
+    this.updateSpecialSnowball(snowball, dt);
     this.updateSnowfall(state, dt);
     this.updatePickupVisuals(state);
     this.updateSnowTrail(this.riderTrail, state.s, state.x, !riderInLift && state.grounded && state.recovering <= 0, state.speed, state.carve);
@@ -1318,6 +1325,42 @@ export class GameView {
       velocity.y += (Math.random() - .5) * 2.5;
       velocity.z += (Math.random() - .5) * 2.5;
       this.spawnParticle(origin, index % 3 ? 0xcdf3ff : 0x73bce3, .1 + Math.random() * .09, .34, velocity);
+    }
+  }
+
+  specialPulse(rider: RiderState, kind: "yeti" | "giru"): void {
+    const centerWorld = courseWorldPoint(rider.s, rider.x);
+    const center = new THREE.Vector3(centerWorld.x, courseTerrainHeight(rider.s, rider.x) + .2, centerWorld.z);
+    const color = kind === "yeti" ? 0xbceeff : 0xaf65ed;
+    for (let index = 0; index < 6; index += 1) {
+      const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(new THREE.TorusGeometry(1.1 + index * .22, .085, 7, 42), material);
+      mesh.position.copy(center);
+      mesh.rotation.x = Math.PI / 2;
+      mesh.renderOrder = 19;
+      this.scene.add(mesh);
+      const delay = index * .055;
+      this.windRings.push({ mesh, life: .82 + delay, maxLife: .82, delay });
+    }
+    for (let index = 0; index < 32; index += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const velocity = new THREE.Vector3(Math.cos(angle) * (9 + Math.random() * 13), 1.2 + Math.random() * 4, Math.sin(angle) * (9 + Math.random() * 13));
+      this.spawnParticle(center, index % 3 ? color : PALETTE.snow, .12 + Math.random() * .13, .55, velocity);
+    }
+  }
+
+  private updateSpecialSnowball(snowball: { active: boolean; s: number; x: number }, dt: number): void {
+    this.specialSnowball.visible = snowball.active;
+    if (!snowball.active) return;
+    const world = courseWorldPoint(snowball.s, snowball.x);
+    const frame = courseFrame(snowball.s);
+    this.specialSnowball.position.set(world.x, courseTerrainHeight(snowball.s, snowball.x) + 1.22, world.z);
+    this.specialSnowball.rotation.x += dt * 8;
+    this.specialSnowball.rotation.z -= dt * 5.5;
+    if (Math.random() < dt * (this.quality === "performance" ? 22 : 48)) {
+      const origin = this.specialSnowball.position.clone().add(new THREE.Vector3(-frame.tx * 1.2, -.7, -frame.tz * 1.2));
+      const velocity = new THREE.Vector3(-frame.tx * (5 + Math.random() * 6), 1 + Math.random() * 2.5, -frame.tz * (5 + Math.random() * 6));
+      this.spawnParticle(origin, Math.random() > .25 ? PALETTE.snow : PALETTE.snowBlue, .16 + Math.random() * .16, .42, velocity);
     }
   }
 
@@ -1484,12 +1527,14 @@ export class GameView {
     visual.position.y = -pump;
     visual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
     const slowAura = group.userData.slowAura as THREE.Group;
-    slowAura.visible = group.visible && state.slowTime > 0;
+    slowAura.visible = group.visible && (state.slowTime > 0 || state.timeWarpTime > 0);
     if (slowAura.visible) {
       slowAura.rotation.y += dt * 2.8;
       const pulse = 1 + Math.sin(this.elapsedVisual * 9 + state.linePhase) * .08;
       slowAura.scale.setScalar(pulse);
       slowAura.children.forEach((child, index) => {
+        const auraMaterial = (child as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+        if (auraMaterial?.color) auraMaterial.color.setHex(state.timeWarpTime > 0 ? 0xa95de8 : 0x9fe7ff);
         if (index < 2) child.rotation.z += dt * (index ? -1.9 : 2.3);
         else child.position.y = child.userData.baseY + Math.sin(this.elapsedVisual * 6 + child.userData.phase) * .12;
       });
@@ -1511,10 +1556,10 @@ export class GameView {
       const velocity = new THREE.Vector3(-frame.tx * (8 + Math.random() * 6), 1 + Math.random() * 1.4, -frame.tz * (8 + Math.random() * 6));
       this.spawnParticle(origin, Math.random() > .45 ? PALETTE.yellow : PALETTE.coral, .14 + Math.random() * .1, .32, velocity);
     }
-    if (group.visible && state.slowTime > 0 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
+    if (group.visible && (state.slowTime > 0 || state.timeWarpTime > 0) && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
       const origin = new THREE.Vector3(world.x + (Math.random() - .5) * 1.7, groundY + .5 + Math.random() * 1.7, world.z + (Math.random() - .5) * 1.7);
       const velocity = new THREE.Vector3((Math.random() - .5) * 1.2, .4 + Math.random(), (Math.random() - .5) * 1.2);
-      this.spawnParticle(origin, Math.random() > .35 ? 0x9fe7ff : PALETTE.snow, .11 + Math.random() * .07, .48, velocity);
+      this.spawnParticle(origin, state.timeWarpTime > 0 ? (Math.random() > .35 ? 0xb76aef : 0xead7ff) : Math.random() > .35 ? 0x9fe7ff : PALETTE.snow, .11 + Math.random() * .07, .48, velocity);
     }
   }
 

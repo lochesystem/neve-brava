@@ -6,7 +6,7 @@ import {
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
 import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
 import {
-  applyBlizzardSlow, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
+  applyBlizzardSlow, applyTimeWarp, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
@@ -15,6 +15,15 @@ import { GameView, type Quality } from "./view/GameView.ts";
 
 type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
+type SpecialDefinition = { name: string; cost: number };
+type SnowballSpecial = { active: boolean; s: number; x: number; startS: number; lap: number; hit: Set<CharacterId> };
+
+const SPECIALS: Record<CharacterId, SpecialDefinition> = {
+  snowman: { name: "BOLA GIGANTE", cost: 1_500 },
+  yeti: { name: "GRITO GLACIAL", cost: 1_000 },
+  guy: { name: "TURBO DUPLO", cost: 1_500 },
+  giru: { name: "TEMPO VIOLETA", cost: 1_800 },
+};
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
 const hud = document.querySelector<HTMLElement>("#hud")!;
@@ -91,6 +100,8 @@ let previousTime = performance.now();
 let countdown = 3.35;
 let toastTimer = 0;
 let slowFxTimer = 0;
+let specialFxTimer = 0;
+let snowballSpecial: SnowballSpecial = { active: false, s: 0, x: 0, startS: 0, lap: 1, hit: new Set() };
 let hudTimer = 0;
 let disconnectedPause = false;
 let lastIntentLook = 0;
@@ -103,11 +114,15 @@ const timeLabel = $("#time");
 const scoreLabel = $("#score");
 const comboLabel = $("#combo");
 const creditsLabel = $("#credits");
-const itemNameLabel = $("#item-name");
-const itemIconLabel = $("#item-icon");
+const itemArt = $("#item-art") as HTMLImageElement;
+const itemEmpty = $("#item-empty");
 const itemHud = $("#item-hud");
+const specialHud = $("#special-hud");
+const specialArt = $("#special-art") as HTMLImageElement;
+const specialProgress = $("#special-progress");
 const boostFx = $("#boost-fx");
 const slowFx = $("#slow-fx");
+const specialFx = $("#special-fx");
 const windTargetHud = $("#wind-target-hud");
 const windTargetName = $("#wind-target-name");
 const windTargetDistance = $("#wind-target-distance");
@@ -346,6 +361,9 @@ function startRun(): void {
   previousGiru = { ...giru };
   view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   updateMapPortraits();
+  snowballSpecial = { active: false, s: 0, x: 0, startS: 0, lap: 1, hit: new Set() };
+  specialFxTimer = 0;
+  specialFx.className = "special-fx";
   view.setSelectionMode(false);
   accumulator = 0;
   countdown = 3.35;
@@ -417,6 +435,57 @@ function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
     const position = [rival, guy, giru].filter(racer => racer.finished).length;
     showToast(position === 1 ? `${opponent.name} CHEGOU PRIMEIRO!` : `${opponent.name} CHEGOU EM ${position}º!`, "crash");
   }
+}
+
+function opponents(): RivalState[] { return [rival, guy, giru]; }
+
+function activateSpecialFx(character: CharacterId, duration: number): void {
+  specialFxTimer = duration;
+  specialFx.dataset.special = character;
+  specialFx.classList.add("active");
+}
+
+function useCharacterSpecial(): void {
+  const special = SPECIALS[selectedCharacter];
+  if (state.credits < special.cost) {
+    input.pulse(.12, .18, 80);
+    showToast(`FALTAM ${special.cost - state.credits} MOEDAS`, "coin");
+    return;
+  }
+  if (state.finished || state.liftTime > 0 || state.recovering > 0) return;
+  state.credits -= special.cost;
+  input.pulse(.82, .92, 360);
+
+  if (selectedCharacter === "snowman") {
+    snowballSpecial = { active: true, s: state.s + 2.5, x: state.x, startS: state.s, lap: state.lap, hit: new Set() };
+    activateSpecialFx("snowman", .75);
+  } else if (selectedCharacter === "yeti") {
+    opponents().filter(opponent => !opponent.finished && opponent.lap === state.lap
+      && Math.hypot(opponent.s - state.s, (opponent.x - state.x) * 1.35) <= 27).forEach(applyWindHit);
+    view.specialPulse(state, "yeti");
+    activateSpecialFx("yeti", 1.35);
+  } else if (selectedCharacter === "guy") {
+    state.specialTurboTime = 3;
+    state.speed = Math.max(state.speed, 58);
+    activateSpecialFx("guy", 3);
+  } else {
+    opponents().forEach(applyTimeWarp);
+    view.specialPulse(state, "giru");
+    activateSpecialFx("giru", 3);
+  }
+  showToast(`${special.name}!`, selectedCharacter === "giru" ? "wind" : "clean");
+}
+
+function updateSnowballSpecial(step: number): void {
+  if (!snowballSpecial.active) return;
+  const previousS = snowballSpecial.s;
+  snowballSpecial.s += 68 * step;
+  for (const opponent of opponents()) {
+    if (snowballSpecial.hit.has(opponent.id) || opponent.finished || opponent.lap !== snowballSpecial.lap) continue;
+    if (opponent.s < previousS - 2 || opponent.s > snowballSpecial.s + 2 || Math.abs(opponent.x - snowballSpecial.x) > 5.2) continue;
+    if (applyWindHit(opponent)) snowballSpecial.hit.add(opponent.id);
+  }
+  if (snowballSpecial.s - snowballSpecial.startS >= 145 || snowballSpecial.s >= COURSE_LENGTH) snowballSpecial.active = false;
 }
 
 const WIND_RANGE = 74;
@@ -495,13 +564,23 @@ function updateHud(force = false): void {
   comboLabel.textContent = `×${state.combo.toFixed(1)}`;
   creditsLabel.textContent = String(state.credits);
   const activeItem = state.item ?? (state.turboTime > 0 ? "turbo" : state.shieldTime > 0 ? "shield" : null);
-  const itemNames = { wind: "TIRO DE VENTO", turbo: state.turboTime > 0 ? `TURBO ${state.turboTime.toFixed(1)}s` : "TURBO", shield: state.shieldTime > 0 ? `ESCUDO ${state.shieldTime.toFixed(1)}s` : "ESCUDO", blizzard: "NEVASCA" } as const;
-  const itemIcons = { wind: "➤", turbo: "⚡", shield: "◆", blizzard: "❄" } as const;
-  itemNameLabel.textContent = activeItem ? itemNames[activeItem] : "VAZIO";
-  itemIconLabel.textContent = activeItem ? itemIcons[activeItem] : "—";
+  itemArt.classList.toggle("hidden", !activeItem);
+  itemEmpty.classList.toggle("hidden", Boolean(activeItem));
+  if (activeItem) itemArt.src = `${import.meta.env.BASE_URL}images/items/${activeItem}.png`;
   itemHud.dataset.item = activeItem ?? "empty";
   itemHud.classList.toggle("active", Boolean(state.item));
-  boostFx.classList.toggle("active", state.turboTime > 0);
+  itemHud.setAttribute("aria-label", activeItem ? `Item equipado: ${activeItem}. Use com R3.` : "Slot de item vazio");
+  const special = SPECIALS[selectedCharacter];
+  specialArt.src = `${import.meta.env.BASE_URL}images/specials/${selectedCharacter}.png`;
+  specialHud.dataset.character = selectedCharacter;
+  specialHud.classList.toggle("ready", state.credits >= special.cost);
+  specialHud.setAttribute("aria-label", `${special.name}. Custa ${special.cost} moedas. Use com L3.`);
+  specialHud.style.setProperty("--special-progress", `${Math.min(100, state.credits / special.cost * 100).toFixed(1)}%`);
+  specialProgress.setAttribute("aria-valuemin", "0");
+  specialProgress.setAttribute("aria-valuemax", String(special.cost));
+  specialProgress.setAttribute("aria-valuenow", String(Math.min(special.cost, state.credits)));
+  boostFx.classList.toggle("active", state.turboTime > 0 || state.specialTurboTime > 0);
+  boostFx.classList.toggle("special", state.specialTurboTime > 0);
   const target = state.item === "wind" ? findWindTarget() : null;
   windTargetHud.classList.toggle("hidden", !target);
   if (target) {
@@ -595,12 +674,13 @@ function frame(now: number): void {
     } else {
       accumulator = Math.min(.25, accumulator + dt); let firstStep = true;
       while (accumulator >= fixedStep) {
-        let stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false, itemPressed: false };
+        let stepIntent = firstStep ? intent : { ...intent, jumpPressed: false, jumpReleased: false, itemPressed: false, specialPressed: false };
         if (stepIntent.itemPressed && state.item === "wind" && !findWindTarget()) {
           stepIntent = { ...stepIntent, itemPressed: false };
           input.pulse(.12, .18, 70);
           showToast("SEM ALVO NO ALCANCE", "wind");
         }
+        if (stepIntent.specialPressed) useCharacterSpecial();
         previousRider = { ...state }; const progressBeforeStep = state.s;
         previousRival = { ...rival };
         previousGuy = { ...guy };
@@ -617,6 +697,7 @@ function frame(now: number): void {
         resolveRivalContact(rival, guy);
         resolveRivalContact(rival, giru);
         resolveRivalContact(guy, giru);
+        updateSnowballSpecial(fixedStep);
         if (Math.abs(state.s - progressBeforeStep) > 5) previousRider = { ...state };
         if (Math.abs(rival.s - previousRival.s) > 5) previousRival = { ...rival };
         if (Math.abs(guy.s - previousGuy.s) > 5) previousGuy = { ...guy };
@@ -630,11 +711,12 @@ function frame(now: number): void {
   } else updateMenuInput();
   toastTimer -= dt; if (toastTimer <= 0) toast.classList.remove("show");
   slowFxTimer -= dt; if (slowFxTimer <= 0) slowFx.classList.remove("active");
+  specialFxTimer -= dt; if (specialFxTimer <= 0) specialFx.classList.remove("active");
   const renderState = screen === "playing" && countdown <= 0 ? interpolateRider(previousRider, state, accumulator / fixedStep) : state;
   const renderRival = screen === "playing" && countdown <= 0 ? interpolateRival(previousRival, rival, accumulator / fixedStep) : rival;
   const renderGuy = screen === "playing" && countdown <= 0 ? interpolateRival(previousGuy, guy, accumulator / fixedStep) : guy;
   const renderGiru = screen === "playing" && countdown <= 0 ? interpolateRival(previousGiru, giru, accumulator / fixedStep) : giru;
-  view.render(renderState, renderRival, renderGuy, renderGiru, state.item === "wind" ? findWindTarget()?.opponent.id ?? null : null, lastIntentLook, dt); requestAnimationFrame(frame);
+  view.render(renderState, renderRival, renderGuy, renderGiru, state.item === "wind" ? findWindTarget()?.opponent.id ?? null : null, lastIntentLook, dt, snowballSpecial); requestAnimationFrame(frame);
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);

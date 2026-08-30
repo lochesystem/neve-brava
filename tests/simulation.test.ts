@@ -249,6 +249,15 @@ describe("simulação da prancha", () => {
     expect(shieldRider.shieldTime).toBe(0);
   });
 
+  it("permite ao especial do Guy atingir aproximadamente o dobro da velocidade normal", () => {
+    const rider = createRider();
+    rider.speed = 45;
+    rider.specialTurboTime = 3;
+    for (let index = 0; index < 90; index += 1) updateRider(rider, { ...EMPTY_INTENT, tuck: 1 }, 1 / 60);
+    expect(rider.speed).toBeGreaterThan(82);
+    expect(rider.specialTurboTime).toBeGreaterThan(1.4);
+  });
+
   it("entra automaticamente no teleférico e começa a volta seguinte no topo", () => {
     const rider = createRider();
     rider.credits = 500;

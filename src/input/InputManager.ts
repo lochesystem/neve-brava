@@ -37,6 +37,7 @@ type TouchState = {
   spinRight: boolean;
   flipHeld: boolean;
   itemPressed: boolean;
+  specialPressed: boolean;
 };
 
 export function isTouchDevice(maxTouchPoints: number, coarsePointer: boolean, forced = false): boolean {
@@ -120,7 +121,7 @@ export class InputManager {
     }
 
     root.querySelectorAll<HTMLElement>("[data-touch-action]").forEach(button => {
-      const action = button.dataset.touchAction as "jump" | "spin-left" | "spin-right" | "flip" | "item" | "pause";
+      const action = button.dataset.touchAction as "jump" | "spin-left" | "spin-right" | "flip" | "item" | "special" | "pause";
       const release = (event: PointerEvent) => {
         if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
         button.classList.remove("active");
@@ -138,6 +139,7 @@ export class InputManager {
         if (action === "spin-right") this.touchState.spinRight = true;
         if (action === "flip") this.touchState.flipHeld = true;
         if (action === "item") this.touchState.itemPressed = true;
+        if (action === "special") this.touchState.specialPressed = true;
         if (action === "pause") this.menuQueue.add("pause");
       });
       button.addEventListener("pointerup", release);
@@ -207,6 +209,7 @@ export class InputManager {
         flipHeld: buttons.has(3),
         recoverHeld: buttons.has(1),
         itemPressed: justPressed(11),
+        specialPressed: justPressed(10),
       };
     } else if (this.touchEnabled) {
       intent = {
@@ -225,6 +228,7 @@ export class InputManager {
     this.touchState.jumpPressed = false;
     this.touchState.jumpReleased = false;
     this.touchState.itemPressed = false;
+    this.touchState.specialPressed = false;
     return intent;
   }
 
@@ -270,6 +274,7 @@ export class InputManager {
       flipHeld: this.keys.has("c"),
       recoverHeld: this.keys.has("x"),
       itemPressed: this.pressedKeys.has("r"),
+      specialPressed: this.pressedKeys.has("t"),
     };
   }
 
@@ -295,7 +300,7 @@ export class InputManager {
     return {
       steer: 0, tuck: 0, brake: 0,
       jumpHeld: false, jumpPressed: false, jumpReleased: false,
-      spinLeft: false, spinRight: false, flipHeld: false, itemPressed: false,
+      spinLeft: false, spinRight: false, flipHeld: false, itemPressed: false, specialPressed: false,
     };
   }
 }

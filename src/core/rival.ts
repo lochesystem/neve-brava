@@ -51,6 +51,7 @@ export type RivalState = {
   tumble: number;
   turboTime: number;
   slowTime: number;
+  timeWarpTime: number;
   lap: number;
   liftTime: number;
   finished: boolean;
@@ -117,6 +118,7 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     tumble: 0,
     turboTime: 0,
     slowTime: 0,
+    timeWarpTime: 0,
     lap: 1,
     liftTime: 0,
     finished: false,
@@ -230,6 +232,13 @@ export function applyBlizzardSlow(state: RivalState): boolean {
   return true;
 }
 
+export function applyTimeWarp(state: RivalState): boolean {
+  if (state.finished) return false;
+  state.timeWarpTime = Math.max(state.timeWarpTime, 3);
+  state.speed = Math.max(7, state.speed * .35);
+  return true;
+}
+
 function beginNextLap(state: RivalState): void {
   state.lap += 1;
   state.s = 0;
@@ -263,6 +272,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
   state.windHit = Math.max(0, state.windHit - step);
   state.turboTime = Math.max(0, state.turboTime - step);
   state.slowTime = Math.max(0, state.slowTime - step);
+  state.timeWarpTime = Math.max(0, state.timeWarpTime - step);
 
   if (state.liftTime > 0) {
     state.liftTime = Math.max(0, state.liftTime - step);
@@ -298,8 +308,10 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
   const catchUp = clamp(gap * .2, -2.1, 5.5);
   const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * .95;
   const racingSpeed = clamp(coursePace + catchUp + rhythm + (state.turboTime > 0 ? 9 : 0), 37, state.turboTime > 0 ? 56 : 50.5);
-  const targetSpeed = state.slowTime > 0 ? clamp(racingSpeed * .66, 24, 33) : racingSpeed;
-  state.speed += clamp(targetSpeed - state.speed, -(state.slowTime > 0 ? 14 : 5.5) * step, (state.turboTime > 0 ? 13 : 8.4) * step);
+  const targetSpeed = state.timeWarpTime > 0
+    ? clamp(racingSpeed * .2, 7, 12)
+    : state.slowTime > 0 ? clamp(racingSpeed * .66, 24, 33) : racingSpeed;
+  state.speed += clamp(targetSpeed - state.speed, -(state.timeWarpTime > 0 ? 38 : state.slowTime > 0 ? 14 : 5.5) * step, (state.turboTime > 0 ? 13 : 8.4) * step);
 
   const desiredLateral = clamp((state.targetX - state.x) * 1.15, -10.5, 10.5);
   state.lateralSpeed += clamp(desiredLateral - state.lateralSpeed, -18 * step, 18 * step);

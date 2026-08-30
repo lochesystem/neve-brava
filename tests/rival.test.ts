@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
 import {
-  applyBlizzardSlow, applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
+  applyBlizzardSlow, applyTimeWarp, applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
 } from "../src/core/rival.ts";
 
 afterEach(() => setActiveCourse(COURSES[0].id));
@@ -116,6 +116,17 @@ describe("rivais", () => {
     for (let index = 0; index < 240; index += 1) updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
     expect(guy.slowTime).toBe(0);
     expect(guy.speed).toBeGreaterThan(40);
+  });
+
+  it("quase congela durante os três segundos do especial temporal da Giru", () => {
+    const guy = createRival(GUY_PROFILE);
+    guy.speed = 46;
+    expect(applyTimeWarp(guy)).toBe(true);
+    expect(guy.timeWarpTime).toBe(3);
+    for (let index = 0; index < 60; index += 1) updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
+    expect(guy.speed).toBeLessThan(14);
+    for (let index = 0; index < 130; index += 1) updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
+    expect(guy.timeWarpTime).toBe(0);
   });
 
   it("recebe turbo ao completar a rotação e pousar corretamente", () => {
