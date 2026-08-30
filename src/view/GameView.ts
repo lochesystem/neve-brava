@@ -12,6 +12,7 @@ import {
   courseSlope,
   courseTerrainHeight,
   courseWorldPoint,
+  getActiveCourse,
   rampHeight,
   rampLength,
   type ItemKind,
@@ -43,6 +44,15 @@ type TreeModelSlot = {
 type IceModelSlot = {
   holder: THREE.Group;
   radius: number;
+};
+
+type FenceSide = "left" | "right" | "both";
+type FenceRange = { start: number; end: number; side: FenceSide };
+const COURSE_FENCES: Record<string, FenceRange[]> = {
+  "vale-bravo": [{ start: 360, end: 620, side: "right" }, { start: 1_340, end: 1_570, side: "left" }, { start: 2_360, end: 2_620, side: "both" }],
+  "canion-cristal": [{ start: 260, end: 540, side: "both" }, { start: 1_150, end: 1_430, side: "right" }, { start: 2_420, end: 2_680, side: "left" }],
+  "bosque-torto": [{ start: 180, end: 470, side: "left" }, { start: 1_180, end: 1_500, side: "both" }, { start: 2_620, end: 2_920, side: "right" }],
+  "pico-tempestade": [{ start: 120, end: 380, side: "both" }, { start: 1_220, end: 1_510, side: "left" }, { start: 2_740, end: 3_040, side: "both" }],
 };
 
 type SnowTrail = {
@@ -1781,27 +1791,90 @@ export class GameView {
       this.world.add(line);
     }
 
-    const markerCount = Math.floor(COURSE_LENGTH / 32) * 2;
+    const fenceRanges = COURSE_FENCES[getActiveCourse().id] ?? [];
+    const hasFence = (s: number, side: number) => fenceRanges.some(range =>
+      s >= range.start && s <= range.end && (range.side === "both" || range.side === (side < 0 ? "left" : "right")),
+    );
+    const markerPositions: Array<{ s: number; side: number }> = [];
+    for (let s = 32; s < COURSE_LENGTH; s += 32) {
+      for (const side of [-1, 1]) if (!hasFence(s, side)) markerPositions.push({ s, side });
+    }
     const markerGeometry = new THREE.ConeGeometry(0.24, 1.2, 5);
-    const markers = new THREE.InstancedMesh(markerGeometry, toon(PALETTE.coral), markerCount);
+    const markers = new THREE.InstancedMesh(markerGeometry, toon(PALETTE.coral), markerPositions.length);
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const rotation = new THREE.Quaternion();
     const scale = new THREE.Vector3(1, 1, 1);
-    let markerIndex = 0;
-    for (let s = 32; s < COURSE_LENGTH; s += 32) {
-      for (const side of [-1, 1]) {
-        const lateral = side * (COURSE_HALF_WIDTH + 0.7);
-        const world = courseWorldPoint(s, lateral);
-        position.set(world.x, courseTerrainHeight(s, lateral) + 0.6, world.z);
-        rotation.setFromEuler(new THREE.Euler(0, courseFrame(s).heading, side * 0.12));
-        matrix.compose(position, rotation, scale);
-        markers.setMatrixAt(markerIndex, matrix);
-        markerIndex += 1;
-      }
-    }
+    markerPositions.forEach(({ s, side }, markerIndex) => {
+      const lateral = side * (COURSE_HALF_WIDTH + 0.7);
+      const world = courseWorldPoint(s, lateral);
+      position.set(world.x, courseTerrainHeight(s, lateral) + 0.6, world.z);
+      rotation.setFromEuler(new THREE.Euler(0, courseFrame(s).heading, side * 0.12));
+      matrix.compose(position, rotation, scale);
+      markers.setMatrixAt(markerIndex, matrix);
+    });
     markers.castShadow = true;
     this.world.add(markers);
+    this.createBoundaryFences(fenceRanges);
+  }
+
+  private createBoundaryFences(fenceRanges: FenceRange[]): void {
+    const group = new THREE.Group();
+    const timber = toon(0x79513d);
+    const snow = toon(0xf4f5eb);
+    const postGeometry = new THREE.BoxGeometry(.28, 1.45, .28);
+    const postSnowGeometry = new THREE.BoxGeometry(.36, .13, .36);
+    const railGeometry = new THREE.BoxGeometry(.19, .2, 1);
+    const railSnowGeometry = new THREE.BoxGeometry(.23, .07, 1);
+    const forwardAxis = new THREE.Vector3(0, 0, 1);
+    const addBeam = (start: THREE.Vector3, end: THREE.Vector3, geometry: THREE.BufferGeometry, material: THREE.Material) => {
+      const direction = end.clone().sub(start);
+      const length = direction.length();
+      const beam = new THREE.Mesh(geometry, material);
+      beam.position.copy(start).add(end).multiplyScalar(.5);
+      beam.quaternion.setFromUnitVectors(forwardAxis, direction.normalize());
+      beam.scale.z = length + .08;
+      group.add(beam);
+    };
+    for (const range of fenceRanges) {
+      const sides = range.side === "both" ? [-1, 1] : [range.side === "left" ? -1 : 1];
+      for (const side of sides) {
+        const samples: number[] = [];
+        for (let s = range.start; s < range.end; s += 12) samples.push(s);
+        samples.push(range.end);
+        const bases = samples.map(s => {
+          const lateral = side * (COURSE_HALF_WIDTH + 1.25);
+          const world = courseWorldPoint(s, lateral);
+          return new THREE.Vector3(world.x, courseTerrainHeight(s, lateral), world.z);
+        });
+        bases.forEach(base => {
+          const post = new THREE.Mesh(postGeometry, timber);
+          post.position.copy(base).add(new THREE.Vector3(0, .72, 0));
+          const postSnow = new THREE.Mesh(postSnowGeometry, snow);
+          postSnow.position.copy(base).add(new THREE.Vector3(0, 1.49, 0));
+          group.add(post, postSnow);
+        });
+        for (let index = 0; index < bases.length - 1; index += 1) {
+          for (const y of [.62, 1.12]) {
+            const start = bases[index].clone().add(new THREE.Vector3(0, y, 0));
+            const end = bases[index + 1].clone().add(new THREE.Vector3(0, y, 0));
+            addBeam(start, end, railGeometry, timber);
+            addBeam(
+              start.clone().add(new THREE.Vector3(0, .13, 0)),
+              end.clone().add(new THREE.Vector3(0, .13, 0)),
+              railSnowGeometry,
+              snow,
+            );
+          }
+        }
+      }
+    }
+    group.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = this.quality !== "performance";
+      object.receiveShadow = true;
+    });
+    this.world.add(group);
   }
 
   private createSnowfall(): void {

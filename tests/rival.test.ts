@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
+import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
 import {
   applyBlizzardSlow, applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
 } from "../src/core/rival.ts";
@@ -131,5 +131,23 @@ describe("rivais", () => {
     expect(landing?.type === "RIVAL_LAND" && landing.boost).toBeGreaterThan(1.4);
     expect(guy.turboTime).toBeGreaterThan(1.4);
     expect(guy.speed).toBeGreaterThan(18.5);
+  });
+
+  it("coleta caixa sem moedas e não a trata como obstáculo", () => {
+    const box = ITEM_BOXES.find(item => item.item === "turbo") ?? ITEM_BOXES[0];
+    const guy = createRival(GUY_PROFILE);
+    guy.s = box.s - .35;
+    guy.x = box.x;
+    guy.targetX = box.x;
+    guy.decisionTimer = 1;
+    guy.speed = 24;
+
+    const events = updateRival(guy, raceProgress(guy.lap, guy.s), guy.x, 1 / 20);
+
+    expect(events).toContainEqual({ type: "RIVAL_ITEM", item: box.item, id: box.id });
+    expect(guy.collectedBoxes).toContain(box.id);
+    expect(guy.stun).toBe(0);
+    expect(guy.crashes).toBe(0);
+    if (box.item === "turbo") expect(guy.turboTime).toBeGreaterThan(3);
   });
 });

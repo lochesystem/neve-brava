@@ -11,6 +11,7 @@ import {
   raceProgress,
   rampHeight,
   rampLength,
+  type ItemKind,
 } from "./course.ts";
 import { clamp, lerp, wrapAngle } from "./math.ts";
 import type { RiderState } from "./simulation.ts";
@@ -20,6 +21,7 @@ export type RivalEvent =
   | { type: "RIVAL_CRASH" }
   | { type: "RIVAL_TAKEOFF" }
   | { type: "RIVAL_LAND"; boost: number }
+  | { type: "RIVAL_ITEM"; item: ItemKind; id: string }
   | { type: "RIVAL_LIFT"; nextLap: number }
   | { type: "RIVAL_LAP"; lap: number }
   | { type: "RIVAL_FINISH" };
@@ -58,6 +60,8 @@ export type RivalState = {
   lastRamp: string;
   contactCooldown: number;
   windHit: number;
+  item: ItemKind | null;
+  collectedBoxes: string[];
 };
 
 export type RivalProfile = Pick<RivalState, "id" | "name" | "linePhase" | "paceBias" | "aggression" | "rampAffinity"> & {
@@ -122,6 +126,8 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     lastRamp: "",
     contactCooldown: 0,
     windHit: 0,
+    item: null,
+    collectedBoxes: [],
   };
 }
 
@@ -135,10 +141,13 @@ function lineRisk(state: RivalState, candidate: number, preferredLine: number): 
     if (clearance < 3.3) risk += (3.3 - clearance) * (2.25 - ahead / 105);
   }
   for (const box of ITEM_BOXES) {
+    if (state.collectedBoxes.includes(box.id)) continue;
     const ahead = box.s - state.s;
     if (ahead < 5 || ahead > 76) continue;
     const clearance = Math.abs(candidate - box.x) - box.radius;
-    if (clearance < 3) risk += (3 - clearance) * (2.1 - ahead / 100);
+    // Caixas são uma oportunidade para a IA, nunca um obstáculo pago.
+    // O rival muda de linha para buscá-las sem consultar qualquer saldo.
+    if (clearance < 3) risk -= (3 - clearance) * (1.55 - ahead / 145);
   }
   // Cada perfil decide quanto vale abandonar a linha atual para buscar uma rampa.
   for (const ramp of RAMPS) {
@@ -176,8 +185,25 @@ function obstacleCollision(state: RivalState): boolean {
   if (!state.grounded || state.stun > 0) return false;
   return OBSTACLES.some(obstacle => !obstacle.decorative
     && Math.abs(obstacle.s - state.s) < 1.15
-    && Math.abs(obstacle.x - state.x) < obstacle.radius + .72)
-    || ITEM_BOXES.some(box => Math.abs(box.s - state.s) < 1.15 && Math.abs(box.x - state.x) < box.radius + .72);
+    && Math.abs(obstacle.x - state.x) < obstacle.radius + .72);
+}
+
+function collectItemBoxes(state: RivalState, previousS: number, events: RivalEvent[]): void {
+  const heightAboveSnow = state.y - courseHeight(state.s);
+  for (const box of ITEM_BOXES) {
+    if (state.collectedBoxes.includes(box.id) || previousS >= box.s || state.s + .9 < box.s) continue;
+    if (Math.abs(state.x - box.x) > box.radius + .72 || heightAboveSnow > box.height + .35) continue;
+    state.collectedBoxes.push(box.id);
+    state.item = box.item;
+    // Turbo pode ser usado imediatamente pela IA; toda coleta é registrada
+    // sem consultar ou consumir moedas.
+    if (box.item === "turbo") {
+      state.turboTime = Math.max(state.turboTime, 3.2);
+      state.speed = Math.min(54, state.speed + 5);
+      state.item = null;
+    }
+    events.push({ type: "RIVAL_ITEM", item: box.item, id: box.id });
+  }
 }
 
 export function applyWindHit(state: RivalState): boolean {
@@ -224,6 +250,8 @@ function beginNextLap(state: RivalState): void {
   state.lastRamp = "";
   state.contactCooldown = 1;
   state.windHit = 0;
+  state.item = null;
+  state.collectedBoxes = [];
 }
 
 export function updateRival(state: RivalState, playerProgress: number, playerX: number, dt: number): RivalEvent[] {
@@ -322,6 +350,8 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
       events.push({ type: "RIVAL_LAND", boost });
     }
   }
+
+  collectItemBoxes(state, previousS, events);
 
   // A IA normalmente evita a linha ruim, mas ainda pode errar sob pressão.
   if (obstacleCollision(state)) {
