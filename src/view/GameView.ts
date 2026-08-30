@@ -15,6 +15,7 @@ import {
   rampHeight,
   rampLength,
   type ItemKind,
+  type Obstacle,
 } from "../core/course.ts";
 import { dampAlpha, clamp } from "../core/math.ts";
 import { CRASH_RECOVERY_TIME, type GameEvent, type RiderState } from "../core/simulation.ts";
@@ -33,6 +34,11 @@ type Particle = {
 type WindRing = { mesh: THREE.Mesh; life: number; maxLife: number; delay: number };
 
 type TrailSample = { s: number; x: number };
+
+type TreeModelSlot = {
+  holder: THREE.Group;
+  height: number;
+};
 
 type SnowTrail = {
   geometry: THREE.BufferGeometry;
@@ -505,6 +511,13 @@ export class GameView {
   private coinVisuals: Array<{ id: string; object: THREE.Group; baseY: number; heading: number; phase: number }> = [];
   private boxVisuals: Array<{ id: string; object: THREE.Group; shadow: THREE.Mesh; baseY: number; heading: number; phase: number }> = [];
   private itemBoxModel: THREE.Group | null = null;
+  private treeModel: THREE.Mesh | null = null;
+  private startGateModel: THREE.Mesh | null = null;
+  private finishGateModel: THREE.Mesh | null = null;
+  private obstacleTreeSlots: TreeModelSlot[] = [];
+  private sceneryTreeHolder: THREE.Group | null = null;
+  private startGateSlot: THREE.Group | null = null;
+  private finishGateSlot: THREE.Group | null = null;
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
   private windRings: WindRing[] = [];
@@ -578,6 +591,7 @@ export class GameView {
     this.loadGuyModel();
     this.loadGiruModel();
     this.loadItemBoxModel();
+    this.loadEnvironmentModels();
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
@@ -721,6 +735,155 @@ export class GameView {
     );
   }
 
+  private prepareEnvironmentMesh(scene: THREE.Group, targetSize: THREE.Vector3): THREE.Mesh | null {
+    scene.updateMatrixWorld(true);
+    const source = scene.getObjectByProperty("isMesh", true) as THREE.Mesh | undefined;
+    if (!source) return null;
+    const geometry = source.geometry.clone().applyMatrix4(source.matrixWorld);
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox;
+    if (!bounds) return null;
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    geometry.translate(-center.x, -bounds.min.y, -center.z);
+    geometry.scale(
+      targetSize.x / Math.max(.001, size.x),
+      targetSize.y / Math.max(.001, size.y),
+      targetSize.z / Math.max(.001, size.z),
+    );
+    const mesh = new THREE.Mesh(geometry, source.material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    // Instâncias e clones compartilham os recursos do molde entre as pistas.
+    mesh.userData.persistentEnvironmentAsset = true;
+    return mesh;
+  }
+
+  private loadEnvironmentModels(): void {
+    const loader = new GLTFLoader();
+    loader.load(
+      `${import.meta.env.BASE_URL}models/tree-pine.glb`,
+      gltf => {
+        this.treeModel = this.prepareEnvironmentMesh(gltf.scene, new THREE.Vector3(.573, 1, .573));
+        this.refreshTreeModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar o novo pinheiro; mantendo o modelo procedural.", error),
+    );
+    loader.load(
+      `${import.meta.env.BASE_URL}models/start-gate.glb`,
+      gltf => {
+        this.startGateModel = this.prepareEnvironmentMesh(gltf.scene, new THREE.Vector3(32, 9.35, 1.55));
+        this.refreshGateModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar a placa de partida; mantendo o portal procedural.", error),
+    );
+    loader.load(
+      `${import.meta.env.BASE_URL}models/finish-gate.glb`,
+      gltf => {
+        this.finishGateModel = this.prepareEnvironmentMesh(gltf.scene, new THREE.Vector3(32, 9.35, 1.55));
+        this.refreshGateModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar a placa de chegada; mantendo o portal procedural.", error),
+    );
+  }
+
+  private refreshGateModels(): void {
+    if (this.startGateSlot && this.startGateModel) {
+      this.startGateSlot.clear();
+      this.startGateSlot.add(this.startGateModel.clone());
+    }
+    if (this.finishGateSlot && this.finishGateModel) {
+      this.finishGateSlot.clear();
+      this.finishGateSlot.add(this.finishGateModel.clone());
+    }
+  }
+
+  private refreshTreeModels(): void {
+    if (!this.treeModel) return;
+    for (const slot of this.obstacleTreeSlots) {
+      slot.holder.clear();
+      const tree = this.treeModel.clone();
+      tree.scale.setScalar(slot.height);
+      slot.holder.add(tree);
+    }
+    this.refreshSceneryTreeInstances();
+  }
+
+  private refreshSceneryTreeInstances(): void {
+    if (!this.treeModel || !this.sceneryTreeHolder) return;
+    for (const child of this.sceneryTreeHolder.children) {
+      if (!(child instanceof THREE.Mesh) || child.userData.persistentEnvironmentAsset) continue;
+      child.geometry.dispose();
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      for (const material of materials) material.dispose();
+    }
+    this.sceneryTreeHolder.clear();
+    const trees = OBSTACLES.filter(obstacle => obstacle.decorative && obstacle.kind === "tree");
+    // O GLB tem cerca de 11 mil triângulos. Exibe uma amostra dos pinheiros
+    // próximos à pista, em vez de misturar o modelo novo com árvores antigas.
+    const detailStride = this.quality === "high" ? 2 : this.quality === "medium" ? 3 : 8;
+    const detailedTrees = trees.filter((tree, index) =>
+      Math.abs(tree.x) <= COURSE_HALF_WIDTH + 30 && index % detailStride === 0,
+    );
+    const instances = new THREE.InstancedMesh(this.treeModel.geometry, this.treeModel.material, detailedTrees.length);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const position = new THREE.Vector3();
+    for (let index = 0; index < detailedTrees.length; index += 1) {
+      const tree = detailedTrees[index];
+      const world = courseWorldPoint(tree.s, tree.x);
+      quaternion.setFromEuler(new THREE.Euler(0, (tree.s * .23) % Math.PI, 0));
+      scale.setScalar(tree.height);
+      position.set(world.x, courseTerrainHeight(tree.s, tree.x), world.z);
+      matrix.compose(position, quaternion, scale);
+      instances.setMatrixAt(index, matrix);
+    }
+    // Árvores de obstáculo ainda projetam sombra; a massa decorativa não
+    // precisa recalcular centenas de sombras fora da linha de corrida.
+    instances.castShadow = false;
+    instances.receiveShadow = false;
+    instances.userData.persistentEnvironmentAsset = true;
+    instances.computeBoundingSphere();
+    this.sceneryTreeHolder.add(instances);
+  }
+
+  private addSimpleTreeInstances(trees: Obstacle[], holder: THREE.Group): void {
+    const trunkGeometry = new THREE.CylinderGeometry(.32, .48, 2.2, 6);
+    const crownGeometry = new THREE.ConeGeometry(1.5, 3.5, 7);
+    const upperGeometry = new THREE.ConeGeometry(1.15, 3, 7);
+    const trunks = new THREE.InstancedMesh(trunkGeometry, toon(0x6f5145), trees.length);
+    const crowns = new THREE.InstancedMesh(crownGeometry, toon(PALETTE.pine), trees.length);
+    const uppers = new THREE.InstancedMesh(upperGeometry, toon(PALETTE.pineLight), trees.length);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const position = new THREE.Vector3();
+    trees.forEach((tree, index) => {
+      const world = courseWorldPoint(tree.s, tree.x);
+      const ground = courseTerrainHeight(tree.s, tree.x);
+      const size = tree.height / 7;
+      quaternion.setFromEuler(new THREE.Euler(0, (tree.s * .23) % Math.PI, 0));
+      scale.set(size, size, size);
+      position.set(world.x, ground + 1.1 * size, world.z);
+      matrix.compose(position, quaternion, scale);
+      trunks.setMatrixAt(index, matrix);
+      position.y = ground + 3.3 * size;
+      matrix.compose(position, quaternion, scale);
+      crowns.setMatrixAt(index, matrix);
+      position.y = ground + 5.25 * size;
+      matrix.compose(position, quaternion, scale);
+      uppers.setMatrixAt(index, matrix);
+    });
+    trunks.castShadow = false;
+    crowns.castShadow = false;
+    uppers.castShadow = false;
+    holder.add(trunks, crowns, uppers);
+  }
+
   private createItemBoxVisual(item: ItemKind): THREE.Group {
     const group = new THREE.Group();
     group.add(this.itemBoxModel?.clone(true) ?? createItemBox(item));
@@ -775,6 +938,7 @@ export class GameView {
 
   setQuality(quality: Quality): void {
     this.quality = quality;
+    this.refreshSceneryTreeInstances();
     const dpr = quality === "high" ? 1.75 : quality === "medium" ? 1.35 : 1;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, dpr));
     this.renderer.shadowMap.enabled = quality !== "performance";
@@ -789,6 +953,7 @@ export class GameView {
   rebuildCourse(): void {
     this.world.traverse(object => {
       if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points)) return;
+      if (object.userData.persistentEnvironmentAsset) return;
       object.geometry?.dispose();
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       for (const material of materials) if (material !== this.snowMaterial) material.dispose();
@@ -1233,6 +1398,10 @@ export class GameView {
   }
 
   private createWorld(): void {
+    this.obstacleTreeSlots = [];
+    this.sceneryTreeHolder = null;
+    this.startGateSlot = null;
+    this.finishGateSlot = null;
     const segments = 420;
     // A pista precisa continuar atrás do grid: a câmera de apresentação começa
     // alguns metros antes do atleta e, sem este recuo, enxergava sob o terreno.
@@ -1276,7 +1445,17 @@ export class GameView {
     for (const obstacle of OBSTACLES) {
       if (obstacle.decorative) continue;
       let model: THREE.Group;
-      if (obstacle.kind === "tree") model = createTree(obstacle.height, obstacle.accent);
+      if (obstacle.kind === "tree") {
+        model = new THREE.Group();
+        if (this.treeModel) {
+          const tree = this.treeModel.clone();
+          tree.scale.setScalar(obstacle.height);
+          model.add(tree);
+        } else {
+          model.add(createTree(obstacle.height, obstacle.accent));
+        }
+        this.obstacleTreeSlots.push({ holder: model, height: obstacle.height });
+      }
       else if (obstacle.kind === "rock") model = createRock(obstacle.radius, obstacle.accent);
       else if (obstacle.kind === "ice") model = createIceCrystal(obstacle.radius, obstacle.accent);
       else if (obstacle.kind === "log") model = createLog(obstacle.radius);
@@ -1389,7 +1568,9 @@ export class GameView {
     staging.rotation.y = courseFrame(0).heading;
     this.world.add(staging);
 
-    const startArch = createEventArch("PARTIDA", PALETTE.pine, PALETTE.yellow);
+    const startArch = new THREE.Group();
+    startArch.add(this.startGateModel?.clone() ?? createEventArch("PARTIDA", PALETTE.pine, PALETTE.yellow));
+    this.startGateSlot = startArch;
     this.placeCourseDecoration(startArch, 21, 0);
     this.placeCourseDecoration(createCheckeredLine(), 4, 0, 0.025);
 
@@ -1413,8 +1594,10 @@ export class GameView {
     plaza.receiveShadow = true;
     finishArea.add(plaza);
 
-    const finishArch = createEventArch("META", PALETTE.coral, PALETTE.yellow);
-    finishArch.position.set(0, 0.7, 7);
+    const finishArch = new THREE.Group();
+    finishArch.add(this.finishGateModel?.clone() ?? createEventArch("CHEGADA", PALETTE.coral, PALETTE.yellow));
+    this.finishGateSlot = finishArch;
+    finishArch.position.set(0, 0, 7);
     finishArea.add(finishArch);
     const finishLine = createCheckeredLine(30);
     finishLine.position.set(0, 0.04, 4.2);
@@ -1454,37 +1637,18 @@ export class GameView {
     const scenery = OBSTACLES.filter(obstacle => obstacle.decorative);
     const trees = scenery.filter(obstacle => obstacle.kind === "tree");
     const rocks = scenery.filter(obstacle => obstacle.kind === "rock");
-    const trunkGeometry = new THREE.CylinderGeometry(0.32, 0.48, 2.2, 6);
-    const crownGeometry = new THREE.ConeGeometry(1.5, 3.5, 7);
-    const upperGeometry = new THREE.ConeGeometry(1.15, 3, 7);
-    const trunks = new THREE.InstancedMesh(trunkGeometry, toon(0x6f5145), trees.length);
-    const crowns = new THREE.InstancedMesh(crownGeometry, toon(PALETTE.pine), trees.length);
-    const uppers = new THREE.InstancedMesh(upperGeometry, toon(PALETTE.pineLight), trees.length);
+    this.sceneryTreeHolder = new THREE.Group();
+    this.world.add(this.sceneryTreeHolder);
+    if (this.treeModel) {
+      this.refreshSceneryTreeInstances();
+    } else {
+      this.addSimpleTreeInstances(trees, this.sceneryTreeHolder);
+    }
+
     const matrix = new THREE.Matrix4();
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3();
     const position = new THREE.Vector3();
-    trees.forEach((tree, index) => {
-      const world = courseWorldPoint(tree.s, tree.x);
-      const ground = courseTerrainHeight(tree.s, tree.x);
-      const size = tree.height / 7;
-      quaternion.setFromEuler(new THREE.Euler(0, (tree.s * 0.23) % Math.PI, 0));
-      scale.set(size, size, size);
-      position.set(world.x, ground + 1.1 * size, world.z);
-      matrix.compose(position, quaternion, scale);
-      trunks.setMatrixAt(index, matrix);
-      position.y = ground + 3.3 * size;
-      matrix.compose(position, quaternion, scale);
-      crowns.setMatrixAt(index, matrix);
-      position.y = ground + 5.25 * size;
-      matrix.compose(position, quaternion, scale);
-      uppers.setMatrixAt(index, matrix);
-    });
-    trunks.castShadow = true;
-    crowns.castShadow = true;
-    uppers.castShadow = true;
-    this.world.add(trunks, crowns, uppers);
-
     const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
     const rockInstances = new THREE.InstancedMesh(rockGeometry, toon(PALETTE.rock), rocks.length);
     rocks.forEach((rock, index) => {
