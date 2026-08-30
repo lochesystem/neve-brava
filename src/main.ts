@@ -220,10 +220,10 @@ function buildRaceMap(): void {
   $("#map-course-name").textContent = course.name;
 }
 
-function markerTransform(progress: number, lateral: number, heading: number): string {
+function markerTransform(progress: number, lateral: number): string {
   const x = 24 + (courseCenterX(progress) + lateral - mapProjection.minX) / mapProjection.spanX * 132;
   const y = 24 + Math.min(1, Math.max(0, progress / COURSE_LENGTH)) * 472;
-  return `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(-heading * 35).toFixed(1)})`;
+  return `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
 }
 
 function currentRacePosition(): number {
@@ -232,13 +232,33 @@ function currentRacePosition(): number {
 }
 
 function updateMapMarker(): void {
-  mapMarker.setAttribute("transform", markerTransform(state.s, state.x, state.heading));
-  mapRival.setAttribute("transform", markerTransform(rival.s, rival.x, rival.heading));
-  mapGuy.setAttribute("transform", markerTransform(guy.s, guy.x, guy.heading));
-  mapGiru.setAttribute("transform", markerTransform(giru.s, giru.x, giru.heading));
+  mapMarker.setAttribute("transform", markerTransform(state.s, state.x));
+  mapRival.setAttribute("transform", markerTransform(rival.s, rival.x));
+  mapGuy.setAttribute("transform", markerTransform(guy.s, guy.x));
+  mapGiru.setAttribute("transform", markerTransform(giru.s, giru.x));
+  [
+    { marker: mapMarker, progress: raceProgress(state.lap, state.s) },
+    { marker: mapRival, progress: raceProgress(rival.lap, rival.s) },
+    { marker: mapGuy, progress: raceProgress(guy.lap, guy.s) },
+    { marker: mapGiru, progress: raceProgress(giru.lap, giru.s) },
+  ].sort((first, second) => first.progress - second.progress)
+    .forEach(({ marker }) => marker.parentElement?.append(marker));
   const position = currentRacePosition();
   $("#race-position").innerHTML = `${position}º <i>/ 4</i>`;
   raceLap.textContent = `VOLTA ${state.lap}/${RACE_LAPS}`;
+}
+
+function setMapPortrait(marker: SVGGElement, character: CharacterId): void {
+  const portrait = marker.querySelector<SVGImageElement>(".map-portrait");
+  portrait?.setAttribute("href", `${import.meta.env.BASE_URL}images/minimap/${character}.png`);
+  marker.setAttribute("aria-label", characterById(character).name);
+}
+
+function updateMapPortraits(): void {
+  setMapPortrait(mapMarker, selectedCharacter);
+  setMapPortrait(mapRival, rival.id);
+  setMapPortrait(mapGuy, guy.id);
+  setMapPortrait(mapGiru, giru.id);
 }
 
 function formatTime(seconds: number): string {
@@ -325,6 +345,7 @@ function startRun(): void {
   giru = createOpponent(opponents[2], 7.4);
   previousGiru = { ...giru };
   view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
+  updateMapPortraits();
   view.setSelectionMode(false);
   accumulator = 0;
   countdown = 3.35;
@@ -392,7 +413,10 @@ function finish(): void {
 
 function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
   if (event.type === "RIVAL_CRASH" && Math.abs(opponent.s - state.s) < 55) showToast(`${opponent.name} TOMBOU!`, "near");
-  if (event.type === "RIVAL_FINISH" && !state.finished) showToast(`${opponent.name} CHEGOU PRIMEIRO!`, "crash");
+  if (event.type === "RIVAL_FINISH" && !state.finished) {
+    const position = [rival, guy, giru].filter(racer => racer.finished).length;
+    showToast(position === 1 ? `${opponent.name} CHEGOU PRIMEIRO!` : `${opponent.name} CHEGOU EM ${position}º!`, "crash");
+  }
 }
 
 const WIND_RANGE = 74;
