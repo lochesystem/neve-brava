@@ -623,7 +623,7 @@ export class GameView {
         const orientedModel = new THREE.Group();
         // O eixo frontal do GLB não coincide com o eixo longitudinal da prancha.
         // Este ponto médio remove o desvio visual para a esquerda ou direita.
-        orientedModel.rotation.y = Math.PI * 0.625;
+        orientedModel.rotation.y = Math.PI * 0.655;
         orientedModel.add(model);
         this.registerCharacterModel("snowman", orientedModel);
       },
@@ -1778,18 +1778,20 @@ export class GameView {
     const boostFactor = state.turboTime > 0 ? clamp(state.turboTime / .28, 0, 1) : 0;
     const world = courseWorldPoint(state.s, state.x);
     const frame = courseFrame(state.s);
-    const behind = 5.65 + speedFactor * .9 + boostFactor * .45;
-    const cameraY = state.y + 2.55 + (state.grounded ? 0 : 1) + Math.sin(this.elapsedVisual * 36) * .025 * boostFactor;
+    const behind = 5.5 + speedFactor * .75 + boostFactor * .4;
+    // Um ponto de vista mais alto mantém o piloto em destaque, mas revela a
+    // linha da pista e os obstáculos que antes ficavam escondidos atrás dele.
+    const cameraY = state.y + 4.15 + (state.grounded ? 0 : .8) + Math.sin(this.elapsedVisual * 36) * .025 * boostFactor;
     const desired = new THREE.Vector3(
       world.x - frame.tx * behind + frame.nx * (this.lookOffset + Math.sin(this.elapsedVisual * 43) * .045 * boostFactor),
       cameraY,
       world.z - frame.tz * behind + frame.nz * this.lookOffset,
     );
     this.camera.position.lerp(desired, dampAlpha(state.recovering > 0 ? 9 : 4.8, dt));
-    const focusDistance = 14 + speedFactor * 14 + boostFactor * 3;
+    const focusDistance = 15 + speedFactor * 13 + boostFactor * 3;
     const focus = new THREE.Vector3(
       world.x + frame.tx * focusDistance + frame.nx * this.lookOffset * 0.25,
-      state.y + 0.85,
+      state.y + 0.4,
       world.z + frame.tz * focusDistance + frame.nz * this.lookOffset * 0.25,
     );
     this.camera.lookAt(focus);
