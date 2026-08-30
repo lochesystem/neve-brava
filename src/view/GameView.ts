@@ -40,6 +40,11 @@ type TreeModelSlot = {
   height: number;
 };
 
+type IceModelSlot = {
+  holder: THREE.Group;
+  radius: number;
+};
+
 type SnowTrail = {
   geometry: THREE.BufferGeometry;
   positions: Float32Array;
@@ -512,9 +517,11 @@ export class GameView {
   private boxVisuals: Array<{ id: string; object: THREE.Group; shadow: THREE.Mesh; baseY: number; heading: number; phase: number }> = [];
   private itemBoxModel: THREE.Group | null = null;
   private treeModel: THREE.Mesh | null = null;
+  private iceModel: THREE.Mesh | null = null;
   private startGateModel: THREE.Mesh | null = null;
   private finishGateModel: THREE.Mesh | null = null;
   private obstacleTreeSlots: TreeModelSlot[] = [];
+  private obstacleIceSlots: IceModelSlot[] = [];
   private sceneryTreeHolder: THREE.Group | null = null;
   private startGateSlot: THREE.Group | null = null;
   private finishGateSlot: THREE.Group | null = null;
@@ -771,6 +778,17 @@ export class GameView {
       error => console.warn("Não foi possível carregar o novo pinheiro; mantendo o modelo procedural.", error),
     );
     loader.load(
+      `${import.meta.env.BASE_URL}models/ice-crystal.glb`,
+      gltf => {
+        // O molde mantém a mesma escala visual e a mesma base no chão que os
+        // cristais procedurais. As instâncias compartilham geometria e textura.
+        this.iceModel = this.prepareEnvironmentMesh(gltf.scene, new THREE.Vector3(2.05, 2.5, 1.65));
+        this.refreshIceModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar o cristal 3D; mantendo o modelo procedural.", error),
+    );
+    loader.load(
       `${import.meta.env.BASE_URL}models/start-gate.glb`,
       gltf => {
         this.startGateModel = this.prepareEnvironmentMesh(gltf.scene, new THREE.Vector3(32, 9.35, 1.55));
@@ -810,6 +828,16 @@ export class GameView {
       slot.holder.add(tree);
     }
     this.refreshSceneryTreeInstances();
+  }
+
+  private refreshIceModels(): void {
+    if (!this.iceModel) return;
+    for (const slot of this.obstacleIceSlots) {
+      slot.holder.clear();
+      const crystal = this.iceModel.clone();
+      crystal.scale.setScalar(slot.radius);
+      slot.holder.add(crystal);
+    }
   }
 
   private refreshSceneryTreeInstances(): void {
@@ -1399,6 +1427,7 @@ export class GameView {
 
   private createWorld(): void {
     this.obstacleTreeSlots = [];
+    this.obstacleIceSlots = [];
     this.sceneryTreeHolder = null;
     this.startGateSlot = null;
     this.finishGateSlot = null;
@@ -1457,7 +1486,17 @@ export class GameView {
         this.obstacleTreeSlots.push({ holder: model, height: obstacle.height });
       }
       else if (obstacle.kind === "rock") model = createRock(obstacle.radius, obstacle.accent);
-      else if (obstacle.kind === "ice") model = createIceCrystal(obstacle.radius, obstacle.accent);
+      else if (obstacle.kind === "ice") {
+        model = new THREE.Group();
+        if (this.iceModel) {
+          const crystal = this.iceModel.clone();
+          crystal.scale.setScalar(obstacle.radius);
+          model.add(crystal);
+        } else {
+          model.add(createIceCrystal(obstacle.radius, obstacle.accent));
+        }
+        this.obstacleIceSlots.push({ holder: model, radius: obstacle.radius });
+      }
       else if (obstacle.kind === "log") model = createLog(obstacle.radius);
       else if (obstacle.kind === "snowball") model = createSnowball(obstacle.radius, obstacle.accent);
       else model = createFence(obstacle.radius);
