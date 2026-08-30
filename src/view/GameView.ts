@@ -59,6 +59,43 @@ type RampModelSlot = {
   height: number;
 };
 
+type SkyPalette = {
+  background: number;
+  top: number;
+  middle: number;
+  horizon: number;
+  glow: number;
+  fog: number;
+};
+
+const DEFAULT_SKY: SkyPalette = {
+  background: 0x5f8fbd,
+  top: 0x315d94,
+  middle: 0x78afd0,
+  horizon: 0xd9e7e8,
+  glow: 0xffe8b5,
+  fog: 0xc7d8e1,
+};
+
+const COURSE_SKIES: Record<string, SkyPalette> = {
+  "bosque-torto": {
+    background: 0x8a719f,
+    top: 0x554d83,
+    middle: 0xc47f91,
+    horizon: 0xffd2a4,
+    glow: 0xffbd72,
+    fog: 0xe5c3b7,
+  },
+  "pico-tempestade": {
+    background: 0x16345d,
+    top: 0x091b3d,
+    middle: 0x244d79,
+    horizon: 0x7896ae,
+    glow: 0x9fc9ff,
+    fog: 0x879fb3,
+  },
+};
+
 type FenceSide = "left" | "right" | "both";
 type FenceRange = { start: number; end: number; side: FenceSide };
 const COURSE_FENCES: Record<string, FenceRange[]> = {
@@ -623,6 +660,7 @@ export class GameView {
     this.scene.fog = new THREE.Fog(0xc7d8e1, 135, 470);
     this.createLighting();
     this.createSky();
+    this.applyCourseSkyPalette();
     this.scene.add(this.world);
     this.createWorld();
     this.contactShadow.rotation.x = -Math.PI / 2;
@@ -1124,7 +1162,7 @@ export class GameView {
     const dpr = quality === "high" ? 1.75 : quality === "medium" ? 1.35 : 1;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, dpr));
     this.renderer.shadowMap.enabled = quality !== "performance";
-    this.scene.fog = new THREE.Fog(0xc7d8e1, quality === "performance" ? 105 : 135, quality === "performance" ? 350 : 470);
+    this.applyCourseSkyPalette();
     this.resize();
   }
 
@@ -1146,6 +1184,7 @@ export class GameView {
     this.snowfall = null;
     this.snowfallPositions = null;
     this.resetSnowTrails();
+    this.applyCourseSkyPalette();
     this.createWorld();
   }
 
@@ -1528,6 +1567,22 @@ export class GameView {
     this.createSkyMountains();
     this.createSkyClouds();
     this.scene.add(this.skyDome, this.skyMountains, this.skyClouds);
+  }
+
+  private applyCourseSkyPalette(): void {
+    const palette = COURSE_SKIES[getActiveCourse().id] ?? DEFAULT_SKY;
+    this.scene.background = new THREE.Color(palette.background);
+    this.scene.fog = new THREE.Fog(
+      palette.fog,
+      this.quality === "performance" ? 105 : 135,
+      this.quality === "performance" ? 350 : 470,
+    );
+    const material = this.skyDome?.material;
+    if (!(material instanceof THREE.ShaderMaterial)) return;
+    (material.uniforms.topColor.value as THREE.Color).setHex(palette.top);
+    (material.uniforms.middleColor.value as THREE.Color).setHex(palette.middle);
+    (material.uniforms.horizonColor.value as THREE.Color).setHex(palette.horizon);
+    (material.uniforms.glowColor.value as THREE.Color).setHex(palette.glow);
   }
 
   private createSkyMountains(): void {
