@@ -46,6 +46,12 @@ type IceModelSlot = {
   radius: number;
 };
 
+type HorizontalObstacleModelSlot = {
+  holder: THREE.Group;
+  width: number;
+  height: number;
+};
+
 type FenceSide = "left" | "right" | "both";
 type FenceRange = { start: number; end: number; side: FenceSide };
 const COURSE_FENCES: Record<string, FenceRange[]> = {
@@ -552,10 +558,14 @@ export class GameView {
   private itemBoxModel: THREE.Group | null = null;
   private treeModel: THREE.Mesh | null = null;
   private iceModel: THREE.Mesh | null = null;
+  private logModel: THREE.Group | null = null;
+  private fenceObstacleModel: THREE.Group | null = null;
   private startGateModel: THREE.Mesh | null = null;
   private finishGateModel: THREE.Mesh | null = null;
   private obstacleTreeSlots: TreeModelSlot[] = [];
   private obstacleIceSlots: IceModelSlot[] = [];
+  private obstacleLogSlots: HorizontalObstacleModelSlot[] = [];
+  private obstacleFenceSlots: HorizontalObstacleModelSlot[] = [];
   private sceneryTreeHolder: THREE.Group | null = null;
   private startGateSlot: THREE.Group | null = null;
   private finishGateSlot: THREE.Group | null = null;
@@ -806,6 +816,39 @@ export class GameView {
     return mesh;
   }
 
+  private prepareEnvironmentGroup(scene: THREE.Group, targetSize: THREE.Vector3): THREE.Group {
+    const model = scene.clone(true);
+    model.updateMatrixWorld(true);
+    let bounds = new THREE.Box3().setFromObject(model);
+    let size = bounds.getSize(new THREE.Vector3());
+    // Troncos e cercas precisam atravessar a pista pelo eixo X. Alguns
+    // geradores exportam o comprimento no Z; corrige sem deformar o asset.
+    if (size.z > size.x) {
+      model.rotation.y += Math.PI / 2;
+      model.updateMatrixWorld(true);
+      bounds = new THREE.Box3().setFromObject(model);
+      size = bounds.getSize(new THREE.Vector3());
+    }
+    const center = bounds.getCenter(new THREE.Vector3());
+    model.position.x -= center.x;
+    model.position.y -= bounds.min.y;
+    model.position.z -= center.z;
+    const normalized = new THREE.Group();
+    normalized.scale.set(
+      targetSize.x / Math.max(.001, size.x),
+      targetSize.y / Math.max(.001, size.y),
+      targetSize.z / Math.max(.001, size.z),
+    );
+    normalized.add(model);
+    normalized.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+      object.userData.persistentEnvironmentAsset = true;
+    });
+    return normalized;
+  }
+
   private loadEnvironmentModels(): void {
     const loader = new GLTFLoader();
     loader.load(
@@ -827,6 +870,24 @@ export class GameView {
       },
       undefined,
       error => console.warn("Não foi possível carregar o cristal 3D; mantendo o modelo procedural.", error),
+    );
+    loader.load(
+      `${import.meta.env.BASE_URL}models/snow-log.glb`,
+      gltf => {
+        this.logModel = this.prepareEnvironmentGroup(gltf.scene, new THREE.Vector3(2.55, 1.85, 2.05));
+        this.refreshLogModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar o tronco com neve; mantendo o modelo procedural.", error),
+    );
+    loader.load(
+      `${import.meta.env.BASE_URL}models/snow-wooden-fence.glb`,
+      gltf => {
+        this.fenceObstacleModel = this.prepareEnvironmentGroup(gltf.scene, new THREE.Vector3(1.9, 2, .7));
+        this.refreshFenceObstacleModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar a cerca-obstáculo; mantendo o modelo procedural.", error),
     );
     loader.load(
       `${import.meta.env.BASE_URL}models/start-gate.glb`,
@@ -877,6 +938,26 @@ export class GameView {
       const crystal = this.iceModel.clone();
       crystal.scale.setScalar(slot.radius);
       slot.holder.add(crystal);
+    }
+  }
+
+  private refreshLogModels(): void {
+    if (!this.logModel) return;
+    for (const slot of this.obstacleLogSlots) {
+      slot.holder.clear();
+      const log = this.logModel.clone(true);
+      log.scale.multiply(new THREE.Vector3(slot.width, slot.height, slot.height));
+      slot.holder.add(log);
+    }
+  }
+
+  private refreshFenceObstacleModels(): void {
+    if (!this.fenceObstacleModel) return;
+    for (const slot of this.obstacleFenceSlots) {
+      slot.holder.clear();
+      const fence = this.fenceObstacleModel.clone(true);
+      fence.scale.x *= slot.width;
+      slot.holder.add(fence);
     }
   }
 
@@ -1500,6 +1581,8 @@ export class GameView {
   private createWorld(): void {
     this.obstacleTreeSlots = [];
     this.obstacleIceSlots = [];
+    this.obstacleLogSlots = [];
+    this.obstacleFenceSlots = [];
     this.sceneryTreeHolder = null;
     this.startGateSlot = null;
     this.finishGateSlot = null;
@@ -1569,9 +1652,29 @@ export class GameView {
         }
         this.obstacleIceSlots.push({ holder: model, radius: obstacle.radius });
       }
-      else if (obstacle.kind === "log") model = createLog(obstacle.radius);
+      else if (obstacle.kind === "log") {
+        model = new THREE.Group();
+        if (this.logModel) {
+          const log = this.logModel.clone(true);
+          log.scale.multiply(new THREE.Vector3(obstacle.radius, obstacle.height, obstacle.height));
+          model.add(log);
+        } else {
+          model.add(createLog(obstacle.radius));
+        }
+        this.obstacleLogSlots.push({ holder: model, width: obstacle.radius, height: obstacle.height });
+      }
       else if (obstacle.kind === "snowball") model = createSnowball(obstacle.radius, obstacle.accent);
-      else model = createFence(obstacle.radius);
+      else {
+        model = new THREE.Group();
+        if (this.fenceObstacleModel) {
+          const fence = this.fenceObstacleModel.clone(true);
+          fence.scale.x *= obstacle.radius;
+          model.add(fence);
+        } else {
+          model.add(createFence(obstacle.radius));
+        }
+        this.obstacleFenceSlots.push({ holder: model, width: obstacle.radius, height: obstacle.height });
+      }
       const world = courseWorldPoint(obstacle.s, obstacle.x);
       model.position.set(world.x, courseTerrainHeight(obstacle.s, obstacle.x), world.z);
       model.rotation.y = courseFrame(obstacle.s).heading + (obstacle.s * 0.17) % 0.5 - 0.25;
