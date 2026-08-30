@@ -1,6 +1,6 @@
 import "./styles.css";
 import {
-  COURSES, COURSE_LENGTH, courseCenterX, getActiveCourse, setActiveCourse, validateAllCourses,
+  COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
   type CourseDefinition,
 } from "./core/course.ts";
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
@@ -111,6 +111,8 @@ const windTargetName = $("#wind-target-name");
 const windTargetDistance = $("#wind-target-distance");
 const toast = $("#toast");
 const countdownLabel = $("#countdown");
+const liftTransition = $("#lift-transition");
+const liftNextLap = $("#lift-next-lap");
 const startButton = $("#start-button") as HTMLButtonElement;
 const controllerCard = $("#controller-card");
 const controllerName = $("#controller-name");
@@ -122,6 +124,7 @@ const mapMarker = document.querySelector<SVGGElement>("#course-map-marker")!;
 const mapRival = document.querySelector<SVGGElement>("#course-map-rival")!;
 const mapGuy = document.querySelector<SVGGElement>("#course-map-guy")!;
 const mapGiru = document.querySelector<SVGGElement>("#course-map-giru")!;
+const raceLap = $("#race-lap");
 const mapStart = document.querySelector<SVGCircleElement>(".map-start")!;
 const mapFinish = document.querySelector<SVGPathElement>(".map-finish")!;
 const installButton = $("#install-button") as HTMLButtonElement;
@@ -226,8 +229,10 @@ function updateMapMarker(): void {
   mapRival.setAttribute("transform", markerTransform(rival.s, rival.x, rival.heading));
   mapGuy.setAttribute("transform", markerTransform(guy.s, guy.x, guy.heading));
   mapGiru.setAttribute("transform", markerTransform(giru.s, giru.x, giru.heading));
-  const position = 1 + [rival, guy, giru].filter(opponent => opponent.s > state.s + .35).length;
+  const playerProgress = raceProgress(state.lap, state.s);
+  const position = 1 + [rival, guy, giru].filter(opponent => raceProgress(opponent.lap, opponent.s) > playerProgress + .35).length;
   $("#race-position").innerHTML = `${position}º <i>/ 4</i>`;
+  raceLap.textContent = `VOLTA ${state.lap}/${RACE_LAPS}`;
 }
 
 function formatTime(seconds: number): string {
@@ -248,6 +253,9 @@ function showScreen(next: Screen): void {
   settingsScreen.classList.toggle("hidden", next !== "settings");
   menu.classList.toggle("hidden", next === "playing");
   hud.classList.toggle("hidden", !["playing", "paused"].includes(next));
+  const liftActive = next === "playing" && state.liftTime > 0;
+  liftTransition.classList.toggle("active", liftActive);
+  liftTransition.setAttribute("aria-hidden", String(!liftActive));
   const activeScreen = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen]
     .find(element => !element.classList.contains("hidden"));
   if (activeScreen) activeScreen.scrollTop = 0;
@@ -352,7 +360,7 @@ function finish(): void {
   $("#result-crashes").textContent = String(state.crashes);
   const projectedTime = (opponent: RivalState) => opponent.finished
     ? opponent.finishTime
-    : opponent.elapsed + (COURSE_LENGTH - opponent.s) / Math.max(20, opponent.speed);
+    : opponent.elapsed + (RACE_LAPS * COURSE_LENGTH - raceProgress(opponent.lap, opponent.s)) / Math.max(20, opponent.speed);
   const rivals = [rival, guy, giru].map(opponent => ({ opponent, time: projectedTime(opponent) }));
   const position = 1 + rivals.filter(entry => entry.time < state.elapsed).length;
   $("#result-position").textContent = `${position}º`;
@@ -372,8 +380,9 @@ function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
 
 const WIND_RANGE = 74;
 function findWindTarget(): { opponent: RivalState; distance: number } | null {
+  if (state.liftTime > 0) return null;
   return [rival, guy, giru]
-    .filter(opponent => !opponent.finished && opponent.stun <= 0 && opponent.s >= state.s - 5)
+    .filter(opponent => !opponent.finished && opponent.liftTime <= 0 && opponent.lap === state.lap && opponent.stun <= 0 && opponent.s >= state.s - 5)
     .map(opponent => ({ opponent, distance: Math.hypot(opponent.s - state.s, (opponent.x - state.x) * 1.35) }))
     .filter(candidate => candidate.distance <= WIND_RANGE)
     .sort((first, second) => first.distance - second.distance)[0] ?? null;
@@ -409,6 +418,19 @@ function handleEvent(event: GameEvent): void {
     showToast("TUMBOU!", "crash");
   }
   if (event.type === "SECTION") showToast(event.name.toUpperCase(), "clean");
+  if (event.type === "LIFT") {
+    input.pulse(.22, .42, 180);
+    liftNextLap.textContent = `Próxima parada · Volta ${event.nextLap}/${RACE_LAPS}`;
+    liftTransition.classList.add("active");
+    liftTransition.setAttribute("aria-hidden", "false");
+  }
+  if (event.type === "LAP") {
+    liftTransition.classList.remove("active");
+    liftTransition.setAttribute("aria-hidden", "true");
+    view.snapCameraToRider(state);
+    input.pulse(.38, .55, 170);
+    showToast(event.lap === RACE_LAPS ? "ÚLTIMA VOLTA!" : `VOLTA ${event.lap}/${RACE_LAPS}`, "clean");
+  }
   if (event.type === "FINISH") { input.pulse(.45, .8, 420); window.setTimeout(finish, 500); }
 }
 
@@ -537,11 +559,11 @@ function frame(now: number): void {
         previousGuy = { ...guy };
         previousGiru = { ...giru };
         for (const event of updateRider(state, stepIntent, fixedStep)) handleEvent(event);
-        for (const event of updateRival(rival, state.s, state.x, fixedStep)) handleRivalEvent(event, rival);
-        const leader = rival.s > state.s ? rival : state;
-        for (const event of updateRival(guy, leader.s, leader.x, fixedStep)) handleRivalEvent(event, guy);
-        const frontRunner = guy.s > leader.s ? guy : leader;
-        for (const event of updateRival(giru, frontRunner.s, frontRunner.x, fixedStep)) handleRivalEvent(event, giru);
+        for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep)) handleRivalEvent(event, rival);
+        const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
+        for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep)) handleRivalEvent(event, guy);
+        const frontRunner = raceProgress(guy.lap, guy.s) > raceProgress(leader.lap, leader.s) ? guy : leader;
+        for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep)) handleRivalEvent(event, giru);
         if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);
@@ -549,6 +571,9 @@ function frame(now: number): void {
         resolveRivalContact(rival, giru);
         resolveRivalContact(guy, giru);
         if (Math.abs(state.s - progressBeforeStep) > 5) previousRider = { ...state };
+        if (Math.abs(rival.s - previousRival.s) > 5) previousRival = { ...rival };
+        if (Math.abs(guy.s - previousGuy.s) > 5) previousGuy = { ...guy };
+        if (Math.abs(giru.s - previousGiru.s) > 5) previousGiru = { ...giru };
         accumulator -= fixedStep; firstStep = false;
       }
       audio.update(state);

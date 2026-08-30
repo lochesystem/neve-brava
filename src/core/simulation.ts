@@ -3,7 +3,9 @@ import {
   COURSE_LENGTH,
   COINS,
   ITEM_BOXES,
+  LIFT_TRANSITION_TIME,
   OBSTACLES,
+  RACE_LAPS,
   RAMPS,
   courseHeight,
   courseSlope,
@@ -57,6 +59,8 @@ export type GameEvent =
   | { type: "ITEM_ACQUIRED"; item: ItemKind }
   | { type: "ITEM_USED"; item: ItemKind }
   | { type: "SHIELD_BREAK" }
+  | { type: "LIFT"; nextLap: number }
+  | { type: "LAP"; lap: number }
   | { type: "FINISH" };
 
 export type RiderState = {
@@ -93,6 +97,8 @@ export type RiderState = {
   elapsed: number;
   crashes: number;
   nearMisses: number;
+  lap: number;
+  liftTime: number;
   finished: boolean;
   lastSafeS: number;
   lastSafeX: number;
@@ -140,6 +146,8 @@ export function createRider(): RiderState {
     elapsed: 0,
     crashes: 0,
     nearMisses: 0,
+    lap: 1,
+    liftTime: 0,
     finished: false,
     lastSafeS: 0,
     lastSafeX: 0,
@@ -314,6 +322,35 @@ function restoreAfterCrash(state: RiderState): void {
   state.invulnerable = 1.2;
 }
 
+function beginNextLap(state: RiderState): void {
+  touchedObstacles.clear();
+  usedRamps.clear();
+  state.lap += 1;
+  state.s = 0;
+  state.x = 0;
+  state.y = courseHeight(0) + .46;
+  state.speed = 20;
+  state.lateralSpeed = 0;
+  state.grounded = true;
+  state.verticalSpeed = 0;
+  state.carve = 0;
+  state.heading = 0;
+  state.spin = 0;
+  state.flip = 0;
+  state.grabTime = 0;
+  state.airTime = 0;
+  state.jumpCharge = 0;
+  state.landingAssist = 0;
+  state.recovering = 0;
+  state.tumbleTime = 0;
+  state.invulnerable = 1;
+  state.collectedCoins = [];
+  state.collectedBoxes = [];
+  state.lastSafeS = 0;
+  state.lastSafeX = 0;
+  state.section = sectionAt(0).name;
+}
+
 export function updateRider(state: RiderState, intent: GameIntent, dt: number): GameEvent[] {
   const events: GameEvent[] = [];
   if (state.finished) return events;
@@ -322,6 +359,15 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number): 
   state.invulnerable = Math.max(0, state.invulnerable - step);
   state.turboTime = Math.max(0, state.turboTime - step);
   state.shieldTime = Math.max(0, state.shieldTime - step);
+
+  if (state.liftTime > 0) {
+    state.liftTime = Math.max(0, state.liftTime - step);
+    if (state.liftTime <= 0) {
+      beginNextLap(state);
+      events.push({ type: "LAP", lap: state.lap });
+    }
+    return events;
+  }
 
   if (state.recovering > 0) {
     state.recovering = Math.max(0, state.recovering - step);
@@ -406,8 +452,19 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number): 
 
   if (state.s >= COURSE_LENGTH) {
     state.s = COURSE_LENGTH;
-    state.finished = true;
-    events.push({ type: "FINISH" });
+    if (state.lap >= RACE_LAPS) {
+      state.finished = true;
+      events.push({ type: "FINISH" });
+    } else {
+      state.liftTime = LIFT_TRANSITION_TIME;
+      state.speed = 0;
+      state.lateralSpeed = 0;
+      state.grounded = true;
+      state.verticalSpeed = 0;
+      state.turboTime = 0;
+      state.invulnerable = Math.max(state.invulnerable, LIFT_TRANSITION_TIME + .2);
+      events.push({ type: "LIFT", nextLap: state.lap + 1 });
+    }
   }
   return events;
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, courseHeight, setActiveCourse } from "../src/core/course.ts";
+import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
 import {
   applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
 } from "../src/core/rival.ts";
@@ -30,12 +30,13 @@ describe("rivais", () => {
       for (const profile of [YETI_PROFILE, GUY_PROFILE]) {
         const rival = createRival(profile);
         let finishEvents = 0;
-        for (let index = 0; index < 8_000 && !rival.finished; index += 1) {
-          finishEvents += updateRival(rival, rival.s, 0, 1 / 60).filter(event => event.type === "RIVAL_FINISH").length;
+        for (let index = 0; index < 24_000 && !rival.finished; index += 1) {
+          finishEvents += updateRival(rival, raceProgress(rival.lap, rival.s), 0, 1 / 60).filter(event => event.type === "RIVAL_FINISH").length;
         }
         expect(rival.s).toBe(COURSE_LENGTH);
+        expect(rival.lap).toBe(RACE_LAPS);
         expect(rival.finished).toBe(true);
-        expect(rival.finishTime).toBeGreaterThan(45);
+        expect(rival.finishTime).toBeGreaterThan(150);
         expect(finishEvents).toBe(1);
       }
     }
@@ -102,5 +103,20 @@ describe("rivais", () => {
     expect(yeti.stun).toBeGreaterThan(0);
     expect(yeti.grounded).toBe(false);
     expect(yeti.verticalSpeed).toBeGreaterThan(0);
+  });
+
+  it("recebe turbo ao completar a rotação e pousar corretamente", () => {
+    const guy = createRival(GUY_PROFILE);
+    guy.s = 80;
+    guy.grounded = false;
+    guy.y = courseHeight(guy.s) + .53;
+    guy.verticalSpeed = -4;
+    guy.spin = Math.PI * 2;
+    guy.airTime = .8;
+    const events = updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
+    const landing = events.find(event => event.type === "RIVAL_LAND");
+    expect(landing?.type === "RIVAL_LAND" && landing.boost).toBeGreaterThan(1.4);
+    expect(guy.turboTime).toBeGreaterThan(1.4);
+    expect(guy.speed).toBeGreaterThan(18.5);
   });
 });

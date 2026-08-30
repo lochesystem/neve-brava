@@ -9,6 +9,9 @@ export type ItemBox = { id: string; s: number; x: number; item: ItemKind; radius
 export type CourseSection = { start: number; end: number; name: string; color: string };
 type Wave = { amplitude: number; frequency: number; phase: number };
 
+export const RACE_LAPS = 3;
+export const LIFT_TRANSITION_TIME = 2.8;
+
 export type CourseDefinition = {
   id: string; order: number; name: string; subtitle: string; description: string; difficulty: string;
   length: number; halfWidth: number; startHeight: number; descent: number; terrainRoughness: number; scenerySeed: number;
@@ -123,6 +126,10 @@ export let RAMPS: Ramp[] = [];
 export let OBSTACLES: Obstacle[] = [];
 export let COINS: CoinPickup[] = [];
 export let ITEM_BOXES: ItemBox[] = [];
+
+export function raceProgress(lap: number, s: number): number {
+  return (Math.max(1, lap) - 1) * COURSE_LENGTH + clamp(s, 0, COURSE_LENGTH);
+}
 
 function mulberry32(seed: number): () => number {
   let value = seed >>> 0;

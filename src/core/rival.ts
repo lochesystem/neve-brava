@@ -2,10 +2,13 @@ import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
   ITEM_BOXES,
+  LIFT_TRANSITION_TIME,
   OBSTACLES,
+  RACE_LAPS,
   RAMPS,
   courseHeight,
   getActiveCourse,
+  raceProgress,
   rampHeight,
   rampLength,
 } from "./course.ts";
@@ -16,7 +19,9 @@ import type { CharacterId } from "./characters.ts";
 export type RivalEvent =
   | { type: "RIVAL_CRASH" }
   | { type: "RIVAL_TAKEOFF" }
-  | { type: "RIVAL_LAND" }
+  | { type: "RIVAL_LAND"; boost: number }
+  | { type: "RIVAL_LIFT"; nextLap: number }
+  | { type: "RIVAL_LAP"; lap: number }
   | { type: "RIVAL_FINISH" };
 
 export type RivalState = {
@@ -26,6 +31,7 @@ export type RivalState = {
   paceBias: number;
   aggression: number;
   rampAffinity: number;
+  startX: number;
   s: number;
   x: number;
   y: number;
@@ -41,6 +47,9 @@ export type RivalState = {
   airTime: number;
   stun: number;
   tumble: number;
+  turboTime: number;
+  lap: number;
+  liftTime: number;
   finished: boolean;
   finishTime: number;
   elapsed: number;
@@ -85,6 +94,7 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     paceBias: profile.paceBias,
     aggression: profile.aggression,
     rampAffinity: profile.rampAffinity,
+    startX: profile.startX,
     s: 0,
     x: profile.startX,
     y: courseHeight(0) + .52,
@@ -100,6 +110,9 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     airTime: 0,
     stun: 0,
     tumble: 0,
+    turboTime: 0,
+    lap: 1,
+    liftTime: 0,
     finished: false,
     finishTime: 0,
     elapsed: 0,
@@ -133,10 +146,10 @@ function lineRisk(state: RivalState, candidate: number, preferredLine: number): 
   return risk;
 }
 
-function chooseLine(state: RivalState, playerS: number, playerX: number): void {
+function chooseLine(state: RivalState, playerProgress: number, playerX: number): void {
   const edge = COURSE_HALF_WIDTH - 2.2;
   const candidates = [-.78, -.52, -.26, 0, .26, .52, .78].map(value => value * edge);
-  const raceGap = playerS - state.s;
+  const raceGap = playerProgress - raceProgress(state.lap, state.s);
   const mountainLine = (
     Math.sin(state.s * .027 + getActiveCourse().order * 1.4 + state.linePhase) * .48
     + Math.sin(state.s * .011 + 2.3 + state.linePhase * .55) * .2
@@ -166,7 +179,7 @@ function obstacleCollision(state: RivalState): boolean {
 }
 
 export function applyWindHit(state: RivalState): boolean {
-  if (state.finished || state.stun > 0) return false;
+  if (state.finished || state.liftTime > 0 || state.stun > 0) return false;
   const direction = Math.sign(state.x) || (Math.sin(state.s + state.linePhase) > 0 ? 1 : -1);
   state.windHit = 1.05;
   state.stun = 1.05;
@@ -182,13 +195,45 @@ export function applyWindHit(state: RivalState): boolean {
   return true;
 }
 
-export function updateRival(state: RivalState, playerS: number, playerX: number, dt: number): RivalEvent[] {
+function beginNextLap(state: RivalState): void {
+  state.lap += 1;
+  state.s = 0;
+  state.x = state.startX;
+  state.y = courseHeight(0) + .52;
+  state.speed = 20.5;
+  state.lateralSpeed = 0;
+  state.targetX = state.startX;
+  state.decisionTimer = 0;
+  state.grounded = true;
+  state.verticalSpeed = 0;
+  state.carve = 0;
+  state.heading = 0;
+  state.spin = 0;
+  state.airTime = 0;
+  state.stun = 0;
+  state.tumble = 0;
+  state.lastRamp = "";
+  state.contactCooldown = 1;
+  state.windHit = 0;
+}
+
+export function updateRival(state: RivalState, playerProgress: number, playerX: number, dt: number): RivalEvent[] {
   const events: RivalEvent[] = [];
   if (state.finished) return events;
   const step = clamp(dt, 0, 1 / 20);
   state.elapsed += step;
   state.contactCooldown = Math.max(0, state.contactCooldown - step);
   state.windHit = Math.max(0, state.windHit - step);
+  state.turboTime = Math.max(0, state.turboTime - step);
+
+  if (state.liftTime > 0) {
+    state.liftTime = Math.max(0, state.liftTime - step);
+    if (state.liftTime <= 0) {
+      beginNextLap(state);
+      events.push({ type: "RIVAL_LAP", lap: state.lap });
+    }
+    return events;
+  }
 
   if (state.stun > 0) {
     state.stun = Math.max(0, state.stun - step);
@@ -206,16 +251,16 @@ export function updateRival(state: RivalState, playerS: number, playerX: number,
   }
 
   state.decisionTimer -= step;
-  if (state.decisionTimer <= 0) chooseLine(state, playerS, playerX);
+  if (state.decisionTimer <= 0) chooseLine(state, playerProgress, playerX);
 
   const coursePace = 43 + getActiveCourse().order * .3 + state.paceBias;
-  const gap = playerS - state.s;
+  const gap = playerProgress - raceProgress(state.lap, state.s);
   // Recupera terreno com firmeza, mas desacelera quando abre vantagem para a
   // disputa continuar legível e não virar uma perseguição impossível.
   const catchUp = clamp(gap * .22, -3.5, 4.5);
   const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * 1.15;
-  const targetSpeed = clamp(coursePace + catchUp + rhythm, 35, 47.5);
-  state.speed += clamp(targetSpeed - state.speed, -5.5 * step, 7.6 * step);
+  const targetSpeed = clamp(coursePace + catchUp + rhythm + (state.turboTime > 0 ? 9 : 0), 35, state.turboTime > 0 ? 55 : 47.5);
+  state.speed += clamp(targetSpeed - state.speed, -5.5 * step, (state.turboTime > 0 ? 13 : 7.6) * step);
 
   const desiredLateral = clamp((state.targetX - state.x) * 1.15, -10.5, 10.5);
   state.lateralSpeed += clamp(desiredLateral - state.lateralSpeed, -18 * step, 18 * step);
@@ -252,12 +297,18 @@ export function updateRival(state: RivalState, playerS: number, playerX: number,
     state.y += state.verticalSpeed * step;
     const floor = courseHeight(state.s) + .52;
     if (state.y <= floor && state.verticalSpeed < 0) {
+      const completedTrick = Math.abs(state.spin) >= Math.PI * 1.75 && state.airTime >= .35;
+      const boost = completedTrick ? clamp(1.35 + state.rampAffinity * .28 + state.airTime * .18, 1.45, 2.15) : 0;
       state.y = floor;
       state.verticalSpeed = 0;
       state.grounded = true;
+      if (boost > 0) {
+        state.turboTime = Math.max(state.turboTime, boost);
+        state.speed = Math.min(54, state.speed + 5 + boost);
+      }
       state.spin = 0;
       state.airTime = 0;
-      events.push({ type: "RIVAL_LAND" });
+      events.push({ type: "RIVAL_LAND", boost });
     }
   }
 
@@ -274,15 +325,26 @@ export function updateRival(state: RivalState, playerS: number, playerX: number,
   }
 
   if (state.s >= COURSE_LENGTH) {
-    state.finished = true;
-    state.finishTime = state.elapsed;
-    events.push({ type: "RIVAL_FINISH" });
+    state.s = COURSE_LENGTH;
+    if (state.lap >= RACE_LAPS) {
+      state.finished = true;
+      state.finishTime = state.elapsed;
+      events.push({ type: "RIVAL_FINISH" });
+    } else {
+      state.liftTime = LIFT_TRANSITION_TIME;
+      state.speed = 0;
+      state.lateralSpeed = 0;
+      state.grounded = true;
+      state.verticalSpeed = 0;
+      state.turboTime = 0;
+      events.push({ type: "RIVAL_LIFT", nextLap: state.lap + 1 });
+    }
   }
   return events;
 }
 
 export function resolveRiderContact(rival: RivalState, rider: RiderState): boolean {
-  if (rival.contactCooldown > 0 || rival.stun > 0 || rider.recovering > 0 || !rival.grounded || !rider.grounded) return false;
+  if (rival.lap !== rider.lap || rival.liftTime > 0 || rider.liftTime > 0 || rival.contactCooldown > 0 || rival.stun > 0 || rider.recovering > 0 || !rival.grounded || !rider.grounded) return false;
   if (Math.abs(rival.s - rider.s) > 1.75 || Math.abs(rival.x - rider.x) > 1.5) return false;
   const side = Math.sign(rival.x - rider.x) || (Math.sin(rival.s) > 0 ? 1 : -1);
   rival.x += side * .32;
@@ -297,7 +359,7 @@ export function resolveRiderContact(rival: RivalState, rider: RiderState): boole
 }
 
 export function resolveRivalContact(first: RivalState, second: RivalState): boolean {
-  if (first.contactCooldown > 0 || second.contactCooldown > 0 || first.stun > 0 || second.stun > 0 || !first.grounded || !second.grounded) return false;
+  if (first.lap !== second.lap || first.liftTime > 0 || second.liftTime > 0 || first.contactCooldown > 0 || second.contactCooldown > 0 || first.stun > 0 || second.stun > 0 || !first.grounded || !second.grounded) return false;
   if (Math.abs(first.s - second.s) > 1.7 || Math.abs(first.x - second.x) > 1.45) return false;
   const side = Math.sign(first.x - second.x) || (Math.sin(first.s + first.linePhase) > 0 ? 1 : -1);
   first.x += side * .25;

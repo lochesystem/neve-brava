@@ -995,6 +995,12 @@ export class GameView {
     this.createWorld();
   }
 
+  snapCameraToRider(state: RiderState): void {
+    // O teleférico muda o corredor do fim para o topo da montanha. A câmera
+    // acompanha esse corte imediatamente, sem atravessar a pista em lerp.
+    this.updateCamera(state, 10);
+  }
+
   render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, windTargetId: CharacterId | null, look: number, dt: number): void {
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
@@ -1002,6 +1008,9 @@ export class GameView {
     const frame = courseFrame(state.s);
     const boardY = state.y - 0.39;
     const riderMoving = state.elapsed > .05 && state.s > .25;
+    const riderInLift = state.liftTime > 0;
+    this.rider.visible = !riderInLift;
+    this.contactShadow.visible = !riderInLift;
     this.rider.position.set(world.x, boardY, world.z);
     const groundY = courseTerrainHeight(state.s, state.x);
     const airGap = Math.max(0, boardY - groundY - 0.08);
@@ -1051,10 +1060,10 @@ export class GameView {
     this.updateWindRings(dt);
     this.updateSnowfall(state, dt);
     this.updatePickupVisuals(state);
-    this.updateSnowTrail(this.riderTrail, state.s, state.x, state.grounded && state.recovering <= 0, state.speed, state.carve);
-    this.updateSnowTrail(this.rivalTrail, rivalState.s, rivalState.x, rivalState.grounded && rivalState.stun <= 0, rivalState.speed, rivalState.carve);
-    this.updateSnowTrail(this.guyTrail, guyState.s, guyState.x, guyState.grounded && guyState.stun <= 0, guyState.speed, guyState.carve);
-    this.updateSnowTrail(this.giruTrail, giruState.s, giruState.x, giruState.grounded && giruState.stun <= 0, giruState.speed, giruState.carve);
+    this.updateSnowTrail(this.riderTrail, state.s, state.x, !riderInLift && state.grounded && state.recovering <= 0, state.speed, state.carve);
+    this.updateSnowTrail(this.rivalTrail, rivalState.s, rivalState.x, rivalState.liftTime <= 0 && rivalState.grounded && rivalState.stun <= 0, rivalState.speed, rivalState.carve);
+    this.updateSnowTrail(this.guyTrail, guyState.s, guyState.x, guyState.liftTime <= 0 && guyState.grounded && guyState.stun <= 0, guyState.speed, guyState.carve);
+    this.updateSnowTrail(this.giruTrail, giruState.s, giruState.x, giruState.liftTime <= 0 && giruState.grounded && giruState.stun <= 0, giruState.speed, giruState.carve);
     this.riderShield.visible = state.shieldTime > 0;
     if (state.shieldTime > 0) {
       const pulse = 1 + Math.sin(this.elapsedVisual * 8) * .035;
@@ -1268,7 +1277,8 @@ export class GameView {
     // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
     // a sola dentro da camada superficial da neve sem afundar o personagem.
     const snowContactInset = state.id === "yeti" ? .14 : state.id === "guy" ? .085 : state.id === "giru" ? .08 : .035;
-    group.visible = state.s < COURSE_LENGTH + 4;
+    group.visible = state.liftTime <= 0 && state.s < COURSE_LENGTH + 4;
+    shadow.visible = group.visible;
     // Usa o relevo lateral real, não apenas a altura da linha central. O pequeno
     // encaixe evita a fresta entre a base da prancha e a neve.
     group.position.set(world.x, groundY + surfaceOffset - snowContactInset, world.z);
@@ -1291,6 +1301,11 @@ export class GameView {
       const origin = new THREE.Vector3(world.x, groundY + .12, world.z);
       const spray = new THREE.Vector3(-frame.tx * 7 + frame.nx * state.carve * 3, 1.5 + Math.random() * 2, -frame.tz * 7 + frame.nz * state.carve * 3);
       this.spawnParticle(origin, PALETTE.snow, .13 + Math.random() * .08, .42, spray);
+    }
+    if (group.visible && state.turboTime > 0 && Math.random() < dt * (this.quality === "performance" ? 32 : 68)) {
+      const origin = new THREE.Vector3(world.x - frame.tx * 1.05, groundY + .28, world.z - frame.tz * 1.05);
+      const velocity = new THREE.Vector3(-frame.tx * (8 + Math.random() * 6), 1 + Math.random() * 1.4, -frame.tz * (8 + Math.random() * 6));
+      this.spawnParticle(origin, Math.random() > .45 ? PALETTE.yellow : PALETTE.coral, .14 + Math.random() * .1, .32, velocity);
     }
   }
 

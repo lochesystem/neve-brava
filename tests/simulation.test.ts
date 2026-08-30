@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COINS, ITEM_BOXES, OBSTACLES, RAMPS, courseHeight, courseSlope, rampHeight, rampLength } from "../src/core/course.ts";
+import { COINS, COURSE_LENGTH, ITEM_BOXES, LIFT_TRANSITION_TIME, OBSTACLES, RACE_LAPS, RAMPS, courseHeight, courseSlope, rampHeight, rampLength } from "../src/core/course.ts";
 import { EMPTY_INTENT, createRider, interpolateRider, updateRider } from "../src/core/simulation.ts";
 
 describe("simulação da prancha", () => {
@@ -220,5 +220,44 @@ describe("simulação da prancha", () => {
     expect(events.some(event => event.type === "SHIELD_BREAK")).toBe(true);
     expect(events.some(event => event.type === "CRASH")).toBe(false);
     expect(shieldRider.shieldTime).toBe(0);
+  });
+
+  it("entra automaticamente no teleférico e começa a volta seguinte no topo", () => {
+    const rider = createRider();
+    rider.credits = 500;
+    rider.item = "shield";
+    rider.collectedCoins = [COINS[0].id];
+    rider.collectedBoxes = [ITEM_BOXES[0].id];
+    rider.s = COURSE_LENGTH - .1;
+    rider.speed = 30;
+    const entryEvents = updateRider(rider, EMPTY_INTENT, 1 / 60);
+    expect(entryEvents).toContainEqual({ type: "LIFT", nextLap: 2 });
+    expect(rider.liftTime).toBeGreaterThan(0);
+    expect(rider.finished).toBe(false);
+
+    let lapEvents = 0;
+    for (let index = 0; index < Math.ceil(LIFT_TRANSITION_TIME * 60) + 2; index += 1) {
+      lapEvents += updateRider(rider, EMPTY_INTENT, 1 / 60).filter(event => event.type === "LAP").length;
+      if (rider.lap === 2) break;
+    }
+    expect(lapEvents).toBe(1);
+    expect(rider.lap).toBe(2);
+    expect(rider.s).toBe(0);
+    expect(rider.x).toBe(0);
+    expect(rider.credits).toBe(500);
+    expect(rider.item).toBe("shield");
+    expect(rider.collectedCoins).toEqual([]);
+    expect(rider.collectedBoxes).toEqual([]);
+  });
+
+  it("encerra a corrida somente ao concluir a última volta", () => {
+    const rider = createRider();
+    rider.lap = RACE_LAPS;
+    rider.s = COURSE_LENGTH - .1;
+    rider.speed = 30;
+    const events = updateRider(rider, EMPTY_INTENT, 1 / 60);
+    expect(events).toContainEqual({ type: "FINISH" });
+    expect(rider.finished).toBe(true);
+    expect(rider.liftTime).toBe(0);
   });
 });

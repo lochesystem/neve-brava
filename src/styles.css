@@ -425,9 +425,10 @@ button span { margin-right: 8px; }
   transform: rotate(.5deg);
 }
 .course-minimap header { display: flex; align-items: start; justify-content: space-between; gap: 5px; }
-.course-minimap header small,.course-minimap header b { display: block; }
+.course-minimap header small,.course-minimap header b,.course-minimap header em { display: block; }
 .course-minimap header small { font: 900 9px "Barlow Condensed",sans-serif; letter-spacing: .16em; opacity: .62; }
 .course-minimap header b { max-width: 145px; font: italic 900 15px/.95 "Barlow Condensed",sans-serif; text-transform: uppercase; }
+.course-minimap header em { margin-top: 4px; color: #a43e4c; font: 900 10px/1 "Barlow Condensed",sans-serif; letter-spacing: .08em; }
 .course-minimap header strong { flex: 0 0 auto; color: var(--coral); font: italic 900 24px/.9 "Barlow Condensed",sans-serif; text-shadow: 1px 1px 0 var(--ink); }
 .course-minimap header strong i { color: var(--ink); font-size: 11px; text-shadow: none; }
 #course-map { display: block; width: 100%; height: calc(100% - 56px); overflow: visible; }
@@ -462,6 +463,56 @@ button span { margin-right: 8px; }
 .wind-target-hud b { font-size: 10px; letter-spacing: .12em; }
 .wind-target-hud small { color: #cde8fa; font-size: 8px; }
 .countdown { position: absolute; inset: 0; display: grid; place-items: center; color: var(--yellow); -webkit-text-stroke: 3px var(--ink); text-shadow: 7px 8px 0 var(--ink); font: italic 900 min(28vw,220px) "Barlow Condensed"; }
+.lift-transition {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: var(--paper);
+  background:
+    radial-gradient(ellipse at 74% 22%,rgba(155,218,238,.55),transparent 28%),
+    linear-gradient(165deg,#173c59 0%,#2f7796 52%,#8cc9d8 100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .2s ease,visibility 0s linear .2s;
+}
+.lift-transition.active { opacity: 1; visibility: visible; transition: opacity .2s ease; }
+.lift-transition::before,.lift-transition::after {
+  content: "";
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  bottom: -16%;
+  height: 57%;
+  background: #dceff2;
+  clip-path: polygon(0 74%,8% 29%,15% 64%,24% 13%,34% 72%,45% 25%,53% 62%,64% 5%,76% 69%,86% 22%,100% 66%,100% 100%,0 100%);
+  filter: drop-shadow(0 -8px 0 rgba(199,230,236,.48));
+}
+.lift-transition::after { bottom: -26%; opacity: .72; transform: scaleX(1.08); background: #f7fbf8; }
+.lift-snow { position: absolute; inset: 0; opacity: .48; background-image: radial-gradient(circle,#fff 0 2px,transparent 2.5px); background-size: 73px 81px; animation: lift-snowfall 2.2s linear infinite; }
+.lift-mountains { position: absolute; inset: auto -5% 4% -5%; height: 34%; opacity: .2; background: #173c59; clip-path: polygon(0 100%,0 78%,12% 20%,22% 80%,36% 39%,45% 84%,60% 11%,73% 79%,86% 30%,100% 82%,100% 100%); }
+.lift-cable { position: absolute; z-index: 2; left: -4%; right: -4%; top: 29%; height: 5px; background: var(--ink); box-shadow: 0 4px 0 rgba(255,255,255,.14); transform: rotate(-4deg); }
+.lift-car { position: absolute; left: -18%; top: -11px; width: 122px; transform-origin: 50% -2px; }
+.lift-transition.active .lift-car { animation: lift-travel 2.65s cubic-bezier(.18,.72,.22,1) both; }
+.lift-grip { display: block; width: 5px; height: 36px; margin: 0 auto; background: var(--ink); }
+.lift-grip::before { content: ""; position: absolute; left: 47px; top: 29px; width: 28px; height: 5px; border-radius: 5px; background: var(--ink); transform: rotate(-4deg); }
+.lift-cabin { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 122px; height: 82px; padding: 13px 12px 22px; background: var(--coral); border: 5px solid var(--ink); border-radius: 18px 18px 28px 28px; box-shadow: 8px 10px 0 rgba(22,42,59,.36); }
+.lift-cabin::after { content: ""; position: absolute; left: 13px; right: 13px; bottom: 9px; height: 5px; border-radius: 5px; background: var(--yellow); }
+.lift-cabin i { border: 3px solid var(--ink); border-radius: 8px 8px 4px 4px; background: linear-gradient(145deg,#d7f3f7,#78bfd4); }
+.lift-cabin b { position: absolute; left: 50%; bottom: -19px; transform: translateX(-50%) rotate(-2deg); padding: 3px 8px; color: var(--ink); background: var(--yellow); border: 3px solid var(--ink); border-radius: 4px; font: italic 900 15px "Barlow Condensed",sans-serif; }
+.lift-copy { position: relative; z-index: 4; margin-top: 13vh; width: min(500px,calc(100vw - 38px)); padding: 20px 28px 22px; text-align: center; color: var(--ink); background: rgba(248,242,223,.94); border: 4px solid var(--ink); border-radius: 8px 30px 8px 30px; box-shadow: 10px 12px 0 rgba(22,42,59,.4); transform: rotate(-1deg); }
+.lift-copy small { color: #a43e4c; font-weight: 900; letter-spacing: .18em; }
+.lift-copy h2 { margin: 2px 0 0; font: italic 900 clamp(50px,7vw,72px)/.84 "Barlow Condensed",sans-serif; letter-spacing: -.025em; text-transform: uppercase; }
+.lift-copy p { margin: 10px 0 14px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.lift-progress { height: 10px; overflow: hidden; border: 2px solid var(--ink); background: rgba(37,51,72,.12); transform: skewX(-12deg); }
+.lift-progress i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg,var(--mint),var(--yellow),var(--coral)); transform-origin: left; }
+.lift-transition.active .lift-progress i { animation: lift-loading 2.65s linear both; }
+@keyframes lift-travel { 0% { left: -18%; transform: rotate(4deg); } 45% { transform: rotate(-3deg); } 100% { left: 108%; transform: rotate(2deg); } }
+@keyframes lift-loading { from { transform: scaleX(.04); } to { transform: scaleX(1); } }
+@keyframes lift-snowfall { from { background-position: 0 -81px; } to { background-position: 36px 81px; } }
 .dev-badge { position: absolute; right: 20px; bottom: 78px; padding: 5px 9px; background: #a43e4c; color: white; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 
 .touch-controls,.orientation-lock { display: none; }
@@ -541,6 +592,12 @@ button span { margin-right: 8px; }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
+  .mobile-mode .lift-copy { margin-top: 17vh; width: min(390px,calc(100vw - 180px)); padding: 11px 20px 13px; }
+  .mobile-mode .lift-copy h2 { font-size: 46px; }
+  .mobile-mode .lift-copy p { margin: 6px 0 8px; font-size: 10px; }
+  .mobile-mode .lift-car { width: 88px; }
+  .mobile-mode .lift-cabin { width: 88px; height: 59px; padding: 8px 7px 16px; border-width: 4px; }
+  .mobile-mode .lift-grip::before { left: 31px; }
   .mobile-mode .hud-top { padding: max(7px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) 0 max(9px,env(safe-area-inset-left)); }
   .mobile-mode .paper-chip { min-width: 0; padding: 4px 8px; border-width: 1.5px; box-shadow: 2px 2px 0 rgba(37,51,72,.38); }
   .mobile-mode .paper-chip small { font-size: 7px; }
@@ -556,6 +613,7 @@ button span { margin-right: 8px; }
   .mobile-mode .course-minimap { top: 54px; right: max(7px,env(safe-area-inset-right)); width: 78px; height: 43vh; padding: 5px; border-width: 1.5px; box-shadow: 3px 3px 0 rgba(37,51,72,.4); }
   .mobile-mode .course-minimap header small { display: none; }
   .mobile-mode .course-minimap header b { max-width: 54px; font-size: 9px; }
+  .mobile-mode .course-minimap header em { margin-top: 2px; font-size: 7px; }
   .mobile-mode .course-minimap header strong { font-size: 15px; }
   .mobile-mode #course-map { height: calc(100% - 28px); }
   .mobile-mode .course-minimap footer { display: none; }
@@ -656,6 +714,12 @@ button span { margin-right: 8px; }
 }
 
 @media (max-width: 680px) {
+  .lift-copy { margin-top: 18vh; width: min(390px,calc(100vw - 120px)); padding: 12px 20px 14px; }
+  .lift-copy h2 { font-size: 50px; }
+  .lift-copy p { margin: 7px 0 9px; font-size: 11px; }
+  .lift-car { width: 92px; }
+  .lift-cabin { width: 92px; height: 62px; padding: 9px 8px 17px; border-width: 4px; }
+  .lift-grip::before { left: 33px; }
   .title-layout { grid-template-columns: 1fr; gap: 8px; min-height: calc(100vh - 18px); align-content: center; }
   .title-brand { display: block; min-height: 150px; align-self: auto; }
   .title-hero, .title-brand .mountain-mark, .title-brand .eyebrow, .title-brand .tagline { display: none; }

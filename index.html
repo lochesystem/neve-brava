@@ -31,7 +31,7 @@
         <div id="item-hud" class="item-block" data-item="empty"><span id="item-icon" class="item-icon">—</span><div><small>R3 · USAR ITEM</small><b id="item-name">VAZIO</b></div></div>
       </div>
       <aside class="course-minimap" aria-label="Mapa vertical da pista">
-        <header><div><small id="map-course-number">PISTA 01</small><b id="map-course-name">Vale Bravo</b></div><strong id="race-position">1º <i>/ 4</i></strong></header>
+        <header><div><small id="map-course-number">PISTA 01</small><b id="map-course-name">Vale Bravo</b><em id="race-lap">VOLTA 1/3</em></div><strong id="race-position">1º <i>/ 4</i></strong></header>
         <svg id="course-map" viewBox="0 0 180 520" role="img" aria-label="Traçado da pista e posição atual">
           <path class="map-shadow" id="course-map-shadow"></path>
           <path class="map-line" id="course-map-line"></path>
@@ -48,6 +48,22 @@
       <div id="wind-target-hud" class="wind-target-hud hidden" aria-live="polite"><span>◎</span><b id="wind-target-name">ALVO</b><small id="wind-target-distance">0 m</small></div>
       <div id="toast" class="toast"></div>
       <div id="countdown" class="countdown"></div>
+      <div id="lift-transition" class="lift-transition" aria-live="polite" aria-hidden="true">
+        <div class="lift-snow" aria-hidden="true"></div>
+        <div class="lift-mountains" aria-hidden="true"></div>
+        <div class="lift-cable" aria-hidden="true">
+          <div class="lift-car">
+            <span class="lift-grip"></span>
+            <div class="lift-cabin"><i></i><i></i><b>SR</b></div>
+          </div>
+        </div>
+        <div class="lift-copy">
+          <small>SUBINDO A MONTANHA</small>
+          <h2>TELEFÉRICO</h2>
+          <p id="lift-next-lap">Próxima parada · Volta 2/3</p>
+          <div class="lift-progress" aria-hidden="true"><i></i></div>
+        </div>
+      </div>
       <div id="dev-badge" class="dev-badge hidden">MODO DEV · TECLADO</div>
       <div id="touch-controls" class="touch-controls" aria-label="Controles touch">
         <div class="touch-actions" aria-label="Manobras">

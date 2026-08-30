@@ -113,6 +113,8 @@ export class AudioManager {
       ITEM_ACQUIRED: [360, 920, .2],
       ITEM_USED: [280, 1_080, .24],
       SHIELD_BREAK: [980, 260, .24],
+      LIFT: [310, 780, .24],
+      LAP: [520, 880, .28],
       FINISH: [520, 1_040, 0.38],
     };
     const profile = event.type === "ITEM_USED" && event.item === "wind"
