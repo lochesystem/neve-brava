@@ -202,6 +202,33 @@ describe("simulação da prancha", () => {
     expect(rider.collectedBoxes).toContain(box.id);
   });
 
+  it("oferece a Nevasca em 40% das caixas somente para o último colocado", () => {
+    const box = ITEM_BOXES[0];
+    const last = createRider();
+    last.s = box.s - .2; last.x = box.x; last.y = courseHeight(last.s) + .46; last.speed = 30;
+    const luckyEvents = updateRider(last, EMPTY_INTENT, 1 / 60, 4, () => .39);
+    expect(luckyEvents).toContainEqual({ type: "ITEM_ACQUIRED", item: "blizzard" });
+    expect(last.item).toBe("blizzard");
+
+    const unlucky = createRider();
+    unlucky.s = box.s - .2; unlucky.x = box.x; unlucky.y = courseHeight(unlucky.s) + .46; unlucky.speed = 30;
+    updateRider(unlucky, EMPTY_INTENT, 1 / 60, 4, () => .4);
+    expect(unlucky.item).toBe(box.item);
+
+    const notLast = createRider();
+    notLast.s = box.s - .2; notLast.x = box.x; notLast.y = courseHeight(notLast.s) + .46; notLast.speed = 30;
+    updateRider(notLast, EMPTY_INTENT, 1 / 60, 3, () => 0);
+    expect(notLast.item).toBe(box.item);
+  });
+
+  it("consome a Nevasca ao usar o item", () => {
+    const rider = createRider();
+    rider.item = "blizzard";
+    const events = updateRider(rider, { ...EMPTY_INTENT, itemPressed: true }, 1 / 60);
+    expect(events).toContainEqual({ type: "ITEM_USED", item: "blizzard" });
+    expect(rider.item).toBeNull();
+  });
+
   it("ativa turbo e usa o escudo para absorver um obstáculo comum", () => {
     const turboRider = createRider();
     turboRider.item = "turbo";

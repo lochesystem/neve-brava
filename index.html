@@ -45,6 +45,7 @@
         <footer><span>PARTIDA</span><span>META</span></footer>
       </aside>
       <div id="boost-fx" class="boost-fx" aria-hidden="true"></div>
+      <div id="slow-fx" class="slow-fx" aria-hidden="true"><i></i><i></i><i></i></div>
       <div id="wind-target-hud" class="wind-target-hud hidden" aria-live="polite"><span>◎</span><b id="wind-target-name">ALVO</b><small id="wind-target-distance">0 m</small></div>
       <div id="toast" class="toast"></div>
       <div id="countdown" class="countdown"></div>
@@ -153,22 +154,26 @@
       </section>
 
       <section id="results-screen" class="screen results hidden">
-        <p class="eyebrow">DESCIDA CONCLUÍDA</p>
-        <h2 id="result-course">Você deixou um risco<br />na montanha.</h2>
-        <div class="result-grid">
-          <div><small>TEMPO</small><b id="result-time">00:00.00</b></div>
-          <div><small>PONTOS</small><b id="result-score">0</b></div>
-          <div><small>MAIOR COMBO</small><b id="result-combo">×1.0</b></div>
-          <div><small>MELHOR MANOBRA</small><b id="result-trick">—</b></div>
-          <div><small>NEAR MISSES</small><b id="result-near">0</b></div>
-          <div><small>QUEDAS</small><b id="result-crashes">0</b></div>
-          <div><small>POSIÇÃO</small><b id="result-position">1º</b></div>
-          <div><small>RIVAIS</small><b id="result-rival">—</b></div>
+        <div id="result-winner" class="result-winner snowman">
+          <div class="winner-burst" aria-hidden="true"></div>
+          <img id="result-winner-image" src="%BASE_URL%images/characters/snowman.png" alt="" />
+          <div class="winner-label"><small>CAMPEÃO DA ETAPA</small><b id="result-winner-name">NEVINHO</b></div>
         </div>
-        <div class="menu-actions">
-          <button id="next-track-button" class="primary focusable"><span>✕</span> PRÓXIMA PISTA</button>
-          <button id="restart-button" class="secondary focusable">DESCER DE NOVO</button>
-          <button id="result-title-button" class="secondary focusable">MENU INICIAL</button>
+        <div class="result-board">
+          <p class="eyebrow">CLASSIFICAÇÃO FINAL</p>
+          <h2 id="result-course">Vale Bravo</h2>
+          <ol id="result-standings" class="result-standings" aria-label="Classificação e tempos"></ol>
+          <div class="result-stats">
+            <div><small>PONTOS</small><b id="result-score">0</b></div>
+            <div><small>MAIOR COMBO</small><b id="result-combo">×1.0</b></div>
+            <div><small>MELHOR MANOBRA</small><b id="result-trick">—</b></div>
+            <div><small>QUEDAS</small><b id="result-crashes">0</b></div>
+          </div>
+          <div class="result-actions">
+            <button id="next-track-button" class="primary focusable"><span>✕</span> PRÓXIMA PISTA</button>
+            <button id="restart-button" class="secondary focusable">DESCER DE NOVO</button>
+            <button id="result-title-button" class="secondary focusable">MENU INICIAL</button>
+          </div>
         </div>
       </section>
 

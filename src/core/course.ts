@@ -1,7 +1,7 @@
 import { clamp } from "./math.ts";
 
 export type ObstacleKind = "tree" | "rock" | "fence" | "ice" | "log" | "snowball";
-export type ItemKind = "wind" | "turbo" | "shield";
+export type ItemKind = "wind" | "turbo" | "shield" | "blizzard";
 export type Obstacle = { id: string; kind: ObstacleKind; s: number; x: number; radius: number; height: number; accent?: boolean; decorative?: boolean };
 export type Ramp = { id: string; s: number; x: number; width: number; launch: number; built: boolean };
 export type CoinPickup = { id: string; s: number; x: number; value: 100 };

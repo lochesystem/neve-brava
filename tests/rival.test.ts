@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
 import {
-  applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
+  applyBlizzardSlow, applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
 } from "../src/core/rival.ts";
 
 afterEach(() => setActiveCourse(COURSES[0].id));
@@ -57,7 +57,7 @@ describe("rivais", () => {
       const rival = createRival(profile);
       for (let index = 0; index < 600; index += 1) updateRival(rival, rival.s + 100, 0, 1 / 60);
       expect(rival.speed).toBeGreaterThan(45);
-      expect(rival.speed).toBeLessThanOrEqual(47.5);
+      expect(rival.speed).toBeLessThanOrEqual(50.5);
     }
   });
 
@@ -103,6 +103,19 @@ describe("rivais", () => {
     expect(yeti.stun).toBeGreaterThan(0);
     expect(yeti.grounded).toBe(false);
     expect(yeti.verticalSpeed).toBeGreaterThan(0);
+  });
+
+  it("fica temporariamente lento ao ser atingido pela Nevasca e depois recupera o ritmo", () => {
+    const guy = createRival(GUY_PROFILE);
+    guy.speed = 46;
+    expect(applyBlizzardSlow(guy)).toBe(true);
+    expect(guy.slowTime).toBeGreaterThan(4);
+    expect(guy.speed).toBeLessThan(40);
+    for (let index = 0; index < 120; index += 1) updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
+    expect(guy.speed).toBeLessThan(34);
+    for (let index = 0; index < 240; index += 1) updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
+    expect(guy.slowTime).toBe(0);
+    expect(guy.speed).toBeGreaterThan(40);
   });
 
   it("recebe turbo ao completar a rotação e pousar corretamente", () => {

@@ -199,7 +199,31 @@ function createCoin(): THREE.Group {
 }
 
 function itemColor(item: ItemKind): number {
-  return item === "wind" ? 0x73bce3 : item === "turbo" ? PALETTE.yellow : PALETTE.mint;
+  return item === "wind" ? 0x73bce3 : item === "turbo" ? PALETTE.yellow : item === "blizzard" ? 0x9fe7ff : PALETTE.mint;
+}
+
+function createSlowAura(): THREE.Group {
+  const aura = new THREE.Group();
+  const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x9fe7ff, transparent: true, opacity: .68, depthWrite: false });
+  for (const [height, scale, tilt] of [[.65, 1, .08], [1.35, .78, -.14]] as Array<[number, number, number]>) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, .055, 6, 28), ringMaterial.clone());
+    ring.position.y = height;
+    ring.rotation.set(Math.PI / 2 + tilt, 0, tilt);
+    ring.scale.setScalar(scale);
+    aura.add(ring);
+  }
+  const crystalMaterial = new THREE.MeshBasicMaterial({ color: 0xe5fbff, transparent: true, opacity: .9, depthWrite: false });
+  for (let index = 0; index < 7; index += 1) {
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(.13 + index % 2 * .045, 0), crystalMaterial);
+    const angle = index / 7 * Math.PI * 2;
+    crystal.position.set(Math.cos(angle) * 1.08, .55 + index % 3 * .48, Math.sin(angle) * 1.08);
+    crystal.userData.phase = angle;
+    crystal.userData.baseY = crystal.position.y;
+    aura.add(crystal);
+  }
+  aura.visible = false;
+  aura.renderOrder = 8;
+  return aura;
 }
 
 function createItemBox(item: ItemKind): THREE.Group {
@@ -210,7 +234,7 @@ function createItemBox(item: ItemKind): THREE.Group {
   const ribbon = outlined(new THREE.BoxGeometry(1.98, .28, .34), item === "turbo" ? PALETTE.coral : PALETTE.ink);
   ribbon.position.set(0, 1.02, .9);
   group.add(ribbon);
-  const label = createLabel(item === "wind" ? "VENTO" : item === "turbo" ? "TURBO" : "ESCUDO", 1.55, .48, "#fff8e7");
+  const label = createLabel(item === "wind" ? "VENTO" : item === "turbo" ? "TURBO" : item === "blizzard" ? "NEVASCA" : "ESCUDO", 1.55, .48, "#fff8e7");
   label.position.set(0, 1.15, .93);
   group.add(label);
   const cost = createLabel("200", 1.05, .36, "#253348");
@@ -584,6 +608,12 @@ export class GameView {
     this.rival.add(this.rivalVisual);
     this.guy.add(this.guyVisual);
     this.giru.add(this.giruVisual);
+    this.rival.userData.slowAura = createSlowAura();
+    this.guy.userData.slowAura = createSlowAura();
+    this.giru.userData.slowAura = createSlowAura();
+    this.rival.add(this.rival.userData.slowAura as THREE.Group);
+    this.guy.add(this.guy.userData.slowAura as THREE.Group);
+    this.giru.add(this.giru.userData.slowAura as THREE.Group);
     this.rivalShadow.rotation.x = -Math.PI / 2;
     this.rivalShadow.scale.set(1.9, .7, 1);
     this.guyShadow.rotation.x = -Math.PI / 2;
@@ -1290,6 +1320,17 @@ export class GameView {
     const pump = moving && state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
     visual.position.y = -pump;
     visual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
+    const slowAura = group.userData.slowAura as THREE.Group;
+    slowAura.visible = group.visible && state.slowTime > 0;
+    if (slowAura.visible) {
+      slowAura.rotation.y += dt * 2.8;
+      const pulse = 1 + Math.sin(this.elapsedVisual * 9 + state.linePhase) * .08;
+      slowAura.scale.setScalar(pulse);
+      slowAura.children.forEach((child, index) => {
+        if (index < 2) child.rotation.z += dt * (index ? -1.9 : 2.3);
+        else child.position.y = child.userData.baseY + Math.sin(this.elapsedVisual * 6 + child.userData.phase) * .12;
+      });
+    }
     const airGap = Math.max(0, surfaceOffset);
     shadow.position.set(world.x, groundY + .04, world.z);
     const material = shadow.material as THREE.MeshBasicMaterial;
@@ -1307,6 +1348,11 @@ export class GameView {
       const velocity = new THREE.Vector3(-frame.tx * (8 + Math.random() * 6), 1 + Math.random() * 1.4, -frame.tz * (8 + Math.random() * 6));
       this.spawnParticle(origin, Math.random() > .45 ? PALETTE.yellow : PALETTE.coral, .14 + Math.random() * .1, .32, velocity);
     }
+    if (group.visible && state.slowTime > 0 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
+      const origin = new THREE.Vector3(world.x + (Math.random() - .5) * 1.7, groundY + .5 + Math.random() * 1.7, world.z + (Math.random() - .5) * 1.7);
+      const velocity = new THREE.Vector3((Math.random() - .5) * 1.2, .4 + Math.random(), (Math.random() - .5) * 1.2);
+      this.spawnParticle(origin, Math.random() > .35 ? 0x9fe7ff : PALETTE.snow, .11 + Math.random() * .07, .48, velocity);
+    }
   }
 
   event(event: GameEvent, state: RiderState): void {
@@ -1315,6 +1361,7 @@ export class GameView {
     const count = event.type === "CRASH" ? 20 : event.type === "LAND" ? 14 : event.type === "ITEM_USED" || event.type === "SHIELD_BREAK" ? 18 : event.type === "TAKEOFF" ? 8 : 5;
     const color = event.type === "CRASH" ? PALETTE.coral
       : event.type === "COIN" || (event.type === "ITEM_USED" && event.item === "turbo") ? PALETTE.yellow
+      : event.type === "ITEM_USED" && event.item === "blizzard" ? 0x9fe7ff
       : event.type === "ITEM_ACQUIRED" || event.type === "SHIELD_BREAK" ? PALETTE.mint
       : event.type === "NEAR_MISS" ? PALETTE.yellow : PALETTE.snowBlue;
     for (let index = 0; index < count; index += 1) this.spawnParticle(position, color, event.type === "CRASH" ? 0.3 : 0.18, 0.65 + Math.random() * 0.4);

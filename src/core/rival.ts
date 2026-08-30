@@ -48,6 +48,7 @@ export type RivalState = {
   stun: number;
   tumble: number;
   turboTime: number;
+  slowTime: number;
   lap: number;
   liftTime: number;
   finished: boolean;
@@ -111,6 +112,7 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     stun: 0,
     tumble: 0,
     turboTime: 0,
+    slowTime: 0,
     lap: 1,
     liftTime: 0,
     finished: false,
@@ -195,6 +197,13 @@ export function applyWindHit(state: RivalState): boolean {
   return true;
 }
 
+export function applyBlizzardSlow(state: RivalState): boolean {
+  if (state.finished) return false;
+  state.slowTime = Math.max(state.slowTime, 4.2);
+  state.speed = Math.max(16, state.speed * .82);
+  return true;
+}
+
 function beginNextLap(state: RivalState): void {
   state.lap += 1;
   state.s = 0;
@@ -225,6 +234,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
   state.contactCooldown = Math.max(0, state.contactCooldown - step);
   state.windHit = Math.max(0, state.windHit - step);
   state.turboTime = Math.max(0, state.turboTime - step);
+  state.slowTime = Math.max(0, state.slowTime - step);
 
   if (state.liftTime > 0) {
     state.liftTime = Math.max(0, state.liftTime - step);
@@ -253,14 +263,15 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
   state.decisionTimer -= step;
   if (state.decisionTimer <= 0) chooseLine(state, playerProgress, playerX);
 
-  const coursePace = 43 + getActiveCourse().order * .3 + state.paceBias;
+  const coursePace = 45 + getActiveCourse().order * .35 + state.paceBias;
   const gap = playerProgress - raceProgress(state.lap, state.s);
   // Recupera terreno com firmeza, mas desacelera quando abre vantagem para a
   // disputa continuar legível e não virar uma perseguição impossível.
-  const catchUp = clamp(gap * .22, -3.5, 4.5);
-  const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * 1.15;
-  const targetSpeed = clamp(coursePace + catchUp + rhythm + (state.turboTime > 0 ? 9 : 0), 35, state.turboTime > 0 ? 55 : 47.5);
-  state.speed += clamp(targetSpeed - state.speed, -5.5 * step, (state.turboTime > 0 ? 13 : 7.6) * step);
+  const catchUp = clamp(gap * .2, -2.1, 5.5);
+  const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * .95;
+  const racingSpeed = clamp(coursePace + catchUp + rhythm + (state.turboTime > 0 ? 9 : 0), 37, state.turboTime > 0 ? 56 : 50.5);
+  const targetSpeed = state.slowTime > 0 ? clamp(racingSpeed * .66, 24, 33) : racingSpeed;
+  state.speed += clamp(targetSpeed - state.speed, -(state.slowTime > 0 ? 14 : 5.5) * step, (state.turboTime > 0 ? 13 : 8.4) * step);
 
   const desiredLateral = clamp((state.targetX - state.x) * 1.15, -10.5, 10.5);
   state.lateralSpeed += clamp(desiredLateral - state.lateralSpeed, -18 * step, 18 * step);

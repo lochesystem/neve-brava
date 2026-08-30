@@ -6,7 +6,7 @@ import {
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
 import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
 import {
-  applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
+  applyBlizzardSlow, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
@@ -90,6 +90,7 @@ let accumulator = 0;
 let previousTime = performance.now();
 let countdown = 3.35;
 let toastTimer = 0;
+let slowFxTimer = 0;
 let hudTimer = 0;
 let disconnectedPause = false;
 let lastIntentLook = 0;
@@ -106,6 +107,7 @@ const itemNameLabel = $("#item-name");
 const itemIconLabel = $("#item-icon");
 const itemHud = $("#item-hud");
 const boostFx = $("#boost-fx");
+const slowFx = $("#slow-fx");
 const windTargetHud = $("#wind-target-hud");
 const windTargetName = $("#wind-target-name");
 const windTargetDistance = $("#wind-target-distance");
@@ -224,13 +226,17 @@ function markerTransform(progress: number, lateral: number, heading: number): st
   return `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(-heading * 35).toFixed(1)})`;
 }
 
+function currentRacePosition(): number {
+  const playerProgress = raceProgress(state.lap, state.s);
+  return 1 + [rival, guy, giru].filter(opponent => raceProgress(opponent.lap, opponent.s) > playerProgress + .35).length;
+}
+
 function updateMapMarker(): void {
   mapMarker.setAttribute("transform", markerTransform(state.s, state.x, state.heading));
   mapRival.setAttribute("transform", markerTransform(rival.s, rival.x, rival.heading));
   mapGuy.setAttribute("transform", markerTransform(guy.s, guy.x, guy.heading));
   mapGiru.setAttribute("transform", markerTransform(giru.s, giru.x, giru.heading));
-  const playerProgress = raceProgress(state.lap, state.s);
-  const position = 1 + [rival, guy, giru].filter(opponent => raceProgress(opponent.lap, opponent.s) > playerProgress + .35).length;
+  const position = currentRacePosition();
   $("#race-position").innerHTML = `${position}º <i>/ 4</i>`;
   raceLap.textContent = `VOLTA ${state.lap}/${RACE_LAPS}`;
 }
@@ -351,23 +357,34 @@ function finish(): void {
   audio.setMenuTrack();
   document.documentElement.dataset.musicTrack = "menu";
   const course = getActiveCourse();
-  $("#result-course").innerHTML = `${course.name}<br />concluída.`;
-  $("#result-time").textContent = formatTime(state.elapsed);
+  $("#result-course").textContent = course.name;
   $("#result-score").textContent = state.score.toLocaleString("pt-BR");
   $("#result-combo").textContent = `×${state.bestCombo.toFixed(1)}`;
   $("#result-trick").textContent = state.bestTrick;
-  $("#result-near").textContent = String(state.nearMisses);
   $("#result-crashes").textContent = String(state.crashes);
   const projectedTime = (opponent: RivalState) => opponent.finished
     ? opponent.finishTime
     : opponent.elapsed + (RACE_LAPS * COURSE_LENGTH - raceProgress(opponent.lap, opponent.s)) / Math.max(20, opponent.speed);
-  const rivals = [rival, guy, giru].map(opponent => ({ opponent, time: projectedTime(opponent) }));
-  const position = 1 + rivals.filter(entry => entry.time < state.elapsed).length;
-  $("#result-position").textContent = `${position}º`;
-  $("#result-rival").textContent = rivals.map(({ opponent, time }) => {
-    const gap = Math.abs(time - state.elapsed);
-    return `${opponent.name} ${time >= state.elapsed ? "+" : "−"}${gap.toFixed(2)}s`;
-  }).join(" · ");
+  const portraits: Record<CharacterId, string> = { guy: "guy.png", snowman: "snowman.png", yeti: "yeti.png", giru: "giru-v2.png" };
+  const playerCharacter = characterById(selectedCharacter);
+  const standings = [
+    { id: selectedCharacter, name: playerCharacter.name.toUpperCase(), time: state.elapsed, player: true },
+    ...[rival, guy, giru].map(opponent => ({ id: opponent.id, name: opponent.name, time: projectedTime(opponent), player: false })),
+  ].sort((first, second) => first.time - second.time);
+  const winner = standings[0];
+  const winnerPanel = $("#result-winner");
+  winnerPanel.className = `result-winner ${winner.id}`;
+  const winnerImage = $("#result-winner-image") as HTMLImageElement;
+  winnerImage.src = `${import.meta.env.BASE_URL}images/characters/${portraits[winner.id]}`;
+  winnerImage.alt = `${winner.name}, campeão da etapa`;
+  $("#result-winner-name").textContent = winner.player ? `${winner.name} · VOCÊ` : winner.name;
+  $("#result-standings").innerHTML = standings.map((entry, index) => `
+    <li class="${entry.player ? "player" : ""} ${index === 0 ? "winner" : ""}">
+      <span class="standing-position">${index + 1}</span>
+      <img src="${import.meta.env.BASE_URL}images/characters/${portraits[entry.id]}" alt="" />
+      <b>${entry.name}</b>${entry.player ? "<em>VOCÊ</em>" : ""}
+      <time>${formatTime(entry.time)}</time>
+    </li>`).join("");
   const finalCourse = selectedCourseIndex >= COURSES.length - 1;
   $("#next-track-button").textContent = finalCourse ? "✕ CONCLUIR CAMPANHA" : "✕ PRÓXIMA PISTA";
   showScreen("results");
@@ -399,7 +416,7 @@ function handleEvent(event: GameEvent): void {
   if (event.type === "COIN") { input.pulse(.08, .22, 42, 20); showToast(`MOEDA  +${event.value}`, "coin"); }
   if (event.type === "ITEM_ACQUIRED") {
     input.pulse(.28, .62, 120);
-    showToast(`${event.item === "wind" ? "TIRO DE VENTO" : event.item === "turbo" ? "TURBO" : "ESCUDO"} EQUIPADO`, "clean");
+    showToast(`${event.item === "wind" ? "TIRO DE VENTO" : event.item === "turbo" ? "TURBO" : event.item === "shield" ? "ESCUDO" : "NEVASCA"} EQUIPADO`, event.item === "blizzard" ? "wind" : "clean");
   }
   if (event.type === "ITEM_USED") {
     input.pulse(event.item === "turbo" ? .7 : .35, .65, event.item === "turbo" ? 220 : 140);
@@ -410,6 +427,12 @@ function handleEvent(event: GameEvent): void {
         input.pulse(.72, .88, 250);
         showToast(`RAJADA NO ${target.name}!`, "wind");
       }
+    } else if (event.item === "blizzard") {
+      [rival, guy, giru].forEach(applyBlizzardSlow);
+      slowFxTimer = 1.35;
+      slowFx.classList.add("active");
+      input.pulse(.5, .72, 260);
+      showToast("NEVASCA! · RIVAIS LENTOS", "wind");
     } else showToast(event.item === "turbo" ? "TURBO!" : "ESCUDO ATIVO!", event.item === "turbo" ? "coin" : "clean");
   }
   if (event.type === "SHIELD_BREAK") { input.pulse(.55, .8, 180); showToast("ESCUDO SALVOU!", "clean"); }
@@ -448,8 +471,8 @@ function updateHud(force = false): void {
   comboLabel.textContent = `×${state.combo.toFixed(1)}`;
   creditsLabel.textContent = String(state.credits);
   const activeItem = state.item ?? (state.turboTime > 0 ? "turbo" : state.shieldTime > 0 ? "shield" : null);
-  const itemNames = { wind: "TIRO DE VENTO", turbo: state.turboTime > 0 ? `TURBO ${state.turboTime.toFixed(1)}s` : "TURBO", shield: state.shieldTime > 0 ? `ESCUDO ${state.shieldTime.toFixed(1)}s` : "ESCUDO" } as const;
-  const itemIcons = { wind: "➤", turbo: "⚡", shield: "◆" } as const;
+  const itemNames = { wind: "TIRO DE VENTO", turbo: state.turboTime > 0 ? `TURBO ${state.turboTime.toFixed(1)}s` : "TURBO", shield: state.shieldTime > 0 ? `ESCUDO ${state.shieldTime.toFixed(1)}s` : "ESCUDO", blizzard: "NEVASCA" } as const;
+  const itemIcons = { wind: "➤", turbo: "⚡", shield: "◆", blizzard: "❄" } as const;
   itemNameLabel.textContent = activeItem ? itemNames[activeItem] : "VAZIO";
   itemIconLabel.textContent = activeItem ? itemIcons[activeItem] : "—";
   itemHud.dataset.item = activeItem ?? "empty";
@@ -558,7 +581,7 @@ function frame(now: number): void {
         previousRival = { ...rival };
         previousGuy = { ...guy };
         previousGiru = { ...giru };
-        for (const event of updateRider(state, stepIntent, fixedStep)) handleEvent(event);
+        for (const event of updateRider(state, stepIntent, fixedStep, currentRacePosition())) handleEvent(event);
         for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep)) handleRivalEvent(event, rival);
         const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
         for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep)) handleRivalEvent(event, guy);
@@ -582,6 +605,7 @@ function frame(now: number): void {
     hudTimer += dt; updateHud(); input.consumeMenu("confirm"); input.consumeMenu("back"); input.consumeAnyDirection();
   } else updateMenuInput();
   toastTimer -= dt; if (toastTimer <= 0) toast.classList.remove("show");
+  slowFxTimer -= dt; if (slowFxTimer <= 0) slowFx.classList.remove("active");
   const renderState = screen === "playing" && countdown <= 0 ? interpolateRider(previousRider, state, accumulator / fixedStep) : state;
   const renderRival = screen === "playing" && countdown <= 0 ? interpolateRival(previousRival, rival, accumulator / fixedStep) : rival;
   const renderGuy = screen === "playing" && countdown <= 0 ? interpolateRival(previousGuy, guy, accumulator / fixedStep) : guy;

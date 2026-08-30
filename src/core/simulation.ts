@@ -210,7 +210,7 @@ function crash(state: RiderState, events: GameEvent[], obstacle?: string, force 
   events.push({ type: "CRASH", obstacle });
 }
 
-function updatePickups(state: RiderState, previousS: number, events: GameEvent[]): void {
+function updatePickups(state: RiderState, previousS: number, events: GameEvent[], racePosition: number, random: () => number): void {
   const heightAboveSnow = state.y - courseHeight(state.s);
   for (const coin of COINS) {
     if (state.collectedCoins.includes(coin.id) || !crossing(previousS, state.s + .9, coin.s)) continue;
@@ -223,8 +223,9 @@ function updatePickups(state: RiderState, previousS: number, events: GameEvent[]
     if (state.collectedBoxes.includes(box.id) || !crossing(previousS, state.s + .9, box.s)) continue;
     if (Math.abs(state.x - box.x) > box.radius + .72 || heightAboveSnow > box.height + .35) continue;
     state.collectedBoxes.push(box.id);
-    state.item = box.item;
-    events.push({ type: "ITEM_ACQUIRED", item: box.item });
+    const item: ItemKind = racePosition === 4 && random() < .4 ? "blizzard" : box.item;
+    state.item = item;
+    events.push({ type: "ITEM_ACQUIRED", item });
   }
 }
 
@@ -351,7 +352,7 @@ function beginNextLap(state: RiderState): void {
   state.section = sectionAt(0).name;
 }
 
-export function updateRider(state: RiderState, intent: GameIntent, dt: number): GameEvent[] {
+export function updateRider(state: RiderState, intent: GameIntent, dt: number, racePosition = 1, random: () => number = Math.random): GameEvent[] {
   const events: GameEvent[] = [];
   if (state.finished) return events;
   const step = clamp(dt, 0, 1 / 20);
@@ -436,7 +437,7 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number): 
   updateRamps(state, previousS, events);
   if (!state.grounded && state.y <= courseHeight(state.s) + 0.46 && state.verticalSpeed < 0) land(state, events);
   if (state.grounded) state.y = courseHeight(state.s) + rampSurfaceElevation(state.s, state.x) + 0.46;
-  updatePickups(state, previousS, events);
+  updatePickups(state, previousS, events, racePosition, random);
   updateObstacles(state, previousS, events);
 
   if (state.grounded && state.invulnerable <= 0 && state.s - state.lastSafeS > 18) {
