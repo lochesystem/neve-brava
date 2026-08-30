@@ -52,6 +52,13 @@ type HorizontalObstacleModelSlot = {
   height: number;
 };
 
+type RampModelSlot = {
+  holder: THREE.Group;
+  width: number;
+  length: number;
+  height: number;
+};
+
 type FenceSide = "left" | "right" | "both";
 type FenceRange = { start: number; end: number; side: FenceSide };
 const COURSE_FENCES: Record<string, FenceRange[]> = {
@@ -560,12 +567,14 @@ export class GameView {
   private iceModel: THREE.Mesh | null = null;
   private logModel: THREE.Group | null = null;
   private fenceObstacleModel: THREE.Group | null = null;
+  private rampModel: THREE.Group | null = null;
   private startGateModel: THREE.Mesh | null = null;
   private finishGateModel: THREE.Mesh | null = null;
   private obstacleTreeSlots: TreeModelSlot[] = [];
   private obstacleIceSlots: IceModelSlot[] = [];
   private obstacleLogSlots: HorizontalObstacleModelSlot[] = [];
   private obstacleFenceSlots: HorizontalObstacleModelSlot[] = [];
+  private rampModelSlots: RampModelSlot[] = [];
   private sceneryTreeHolder: THREE.Group | null = null;
   private startGateSlot: THREE.Group | null = null;
   private finishGateSlot: THREE.Group | null = null;
@@ -816,14 +825,19 @@ export class GameView {
     return mesh;
   }
 
-  private prepareEnvironmentGroup(scene: THREE.Group, targetSize: THREE.Vector3): THREE.Group {
+  private prepareEnvironmentGroup(
+    scene: THREE.Group,
+    targetSize: THREE.Vector3,
+    longAxis: "x" | "z" = "x",
+  ): THREE.Group {
     const model = scene.clone(true);
     model.updateMatrixWorld(true);
     let bounds = new THREE.Box3().setFromObject(model);
     let size = bounds.getSize(new THREE.Vector3());
-    // Troncos e cercas precisam atravessar a pista pelo eixo X. Alguns
-    // geradores exportam o comprimento no Z; corrige sem deformar o asset.
-    if (size.z > size.x) {
+    // Troncos e cercas atravessam a pista pelo X; rampas seguem a pista no Z.
+    // Corrige somente a orientação horizontal, sem deformar o asset.
+    const needsQuarterTurn = longAxis === "x" ? size.z > size.x : size.x > size.z;
+    if (needsQuarterTurn) {
       model.rotation.y += Math.PI / 2;
       model.updateMatrixWorld(true);
       bounds = new THREE.Box3().setFromObject(model);
@@ -888,6 +902,15 @@ export class GameView {
       },
       undefined,
       error => console.warn("Não foi possível carregar a cerca-obstáculo; mantendo o modelo procedural.", error),
+    );
+    loader.load(
+      `${import.meta.env.BASE_URL}models/snow-ramp.glb`,
+      gltf => {
+        this.rampModel = this.prepareEnvironmentGroup(gltf.scene, new THREE.Vector3(1, 1, 1), "z");
+        this.refreshRampModels();
+      },
+      undefined,
+      error => console.warn("Não foi possível carregar a rampa 3D; mantendo o modelo procedural.", error),
     );
     loader.load(
       `${import.meta.env.BASE_URL}models/start-gate.glb`,
@@ -958,6 +981,16 @@ export class GameView {
       const fence = this.fenceObstacleModel.clone(true);
       fence.scale.x *= slot.width;
       slot.holder.add(fence);
+    }
+  }
+
+  private refreshRampModels(): void {
+    if (!this.rampModel) return;
+    for (const slot of this.rampModelSlots) {
+      slot.holder.clear();
+      const ramp = this.rampModel.clone(true);
+      ramp.scale.multiply(new THREE.Vector3(slot.width, slot.height, slot.length));
+      slot.holder.add(ramp);
     }
   }
 
@@ -1583,6 +1616,7 @@ export class GameView {
     this.obstacleIceSlots = [];
     this.obstacleLogSlots = [];
     this.obstacleFenceSlots = [];
+    this.rampModelSlots = [];
     this.sceneryTreeHolder = null;
     this.startGateSlot = null;
     this.finishGateSlot = null;
@@ -1718,7 +1752,16 @@ export class GameView {
     for (const ramp of RAMPS) {
       const length = rampLength(ramp);
       const centerS = ramp.s - length / 2;
-      const rampModel = createRampModel(ramp.width, ramp.built, length, rampHeight(ramp));
+      const height = rampHeight(ramp);
+      const rampModel = new THREE.Group();
+      if (this.rampModel) {
+        const visual = this.rampModel.clone(true);
+        visual.scale.multiply(new THREE.Vector3(ramp.width, height, length));
+        rampModel.add(visual);
+      } else {
+        rampModel.add(createRampModel(ramp.width, ramp.built, length, height));
+      }
+      this.rampModelSlots.push({ holder: rampModel, width: ramp.width, length, height });
       const world = courseWorldPoint(centerS, ramp.x);
       rampModel.position.set(world.x, courseTerrainHeight(centerS, ramp.x) + 0.04, world.z);
       rampModel.rotation.set(Math.atan(courseSlope(centerS)), courseFrame(centerS).heading, 0);
