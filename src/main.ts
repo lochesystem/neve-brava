@@ -10,7 +10,7 @@ import {
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
-import { AudioManager, type SnowmanVoiceCue } from "./input/AudioManager.ts";
+import { AudioManager, type GiruVoiceCue, type GuyVoiceCue, type SnowmanVoiceCue, type YetiVoiceCue } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
 
 type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
@@ -451,6 +451,18 @@ function playSnowmanVoice(cue: SnowmanVoiceCue): void {
   if (selectedCharacter === "snowman") audio.playSnowmanVoice(cue);
 }
 
+function playGiruVoice(cue: GiruVoiceCue): void {
+  if (selectedCharacter === "giru") audio.playGiruVoice(cue);
+}
+
+function playYetiVoice(cue: YetiVoiceCue): void {
+  if (selectedCharacter === "yeti") audio.playYetiVoice(cue);
+}
+
+function playGuyVoice(cue: GuyVoiceCue): void {
+  if (selectedCharacter === "guy") audio.playGuyVoice(cue);
+}
+
 function useCharacterSpecial(): void {
   const special = SPECIALS[selectedCharacter];
   if (state.credits < special.cost) {
@@ -462,6 +474,9 @@ function useCharacterSpecial(): void {
   state.credits -= special.cost;
   input.pulse(.82, .92, 360);
   playSnowmanVoice("special");
+  playGiruVoice("special");
+  playYetiVoice("special");
+  playGuyVoice("special");
 
   if (selectedCharacter === "snowman") {
     snowballSpecial = { active: true, s: state.s + 2.5, x: state.x, startS: state.s, lap: state.lap, hit: new Set() };
@@ -520,7 +535,7 @@ function handleEvent(event: GameEvent): void {
   }
   if (event.type === "ITEM_USED") {
     input.pulse(event.item === "turbo" ? .7 : .35, .65, event.item === "turbo" ? 220 : 140);
-    if (event.item === "turbo") playSnowmanVoice("nitro");
+    if (event.item === "turbo") { playSnowmanVoice("nitro"); playGiruVoice("nitro"); playYetiVoice("nitro"); playGuyVoice("nitro"); }
     if (event.item === "wind") {
       const target = findWindTarget()?.opponent;
       if (target && applyWindHit(target)) {
@@ -528,13 +543,17 @@ function handleEvent(event: GameEvent): void {
         input.pulse(.72, .88, 250);
         showToast(`RAJADA NO ${target.name}!`, "wind");
         playSnowmanVoice("wind-hit");
+        playGiruVoice("attack");
+        playYetiVoice("attack");
+        playGuyVoice("attack");
       }
     } else if (event.item === "blizzard") {
-      [rival, guy, giru].forEach(applyBlizzardSlow);
+      const affectedRivals = [rival, guy, giru].filter(applyBlizzardSlow).length;
       slowFxTimer = 1.35;
       slowFx.classList.add("active");
       input.pulse(.5, .72, 260);
       showToast("NEVASCA! · RIVAIS LENTOS", "wind");
+      if (affectedRivals > 0) { playGiruVoice("attack"); playYetiVoice("attack"); playGuyVoice("attack"); }
     } else showToast(event.item === "turbo" ? "TURBO!" : "ESCUDO ATIVO!", event.item === "turbo" ? "coin" : "clean");
   }
   if (event.type === "SHIELD_BREAK") { input.pulse(.55, .8, 180); showToast("ESCUDO SALVOU!", "clean"); }
@@ -542,6 +561,9 @@ function handleEvent(event: GameEvent): void {
     input.pulse(1, .7, 260);
     showToast("TUMBOU!", "crash");
     playSnowmanVoice("hit");
+    playGiruVoice("rage");
+    playYetiVoice("rage");
+    playGuyVoice("rage");
   }
   if (event.type === "SECTION") showToast(event.name.toUpperCase(), "clean");
   if (event.type === "LIFT") {
@@ -708,7 +730,12 @@ function frame(now: number): void {
         resolveRivalContact(rival, giru);
         resolveRivalContact(guy, giru);
         const racePosition = currentRacePosition();
-        if (lastRacePosition > 1 && racePosition === 1) playSnowmanVoice("overtake-first");
+        if (lastRacePosition > 1 && racePosition === 1) {
+          playSnowmanVoice("overtake-first");
+          playGiruVoice("overtake-first");
+          playYetiVoice("overtake-first");
+          playGuyVoice("overtake-first");
+        }
         lastRacePosition = racePosition;
         updateSnowballSpecial(fixedStep);
         if (Math.abs(state.s - progressBeforeStep) > 5) previousRider = { ...state };

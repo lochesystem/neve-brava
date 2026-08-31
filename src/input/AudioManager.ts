@@ -16,6 +16,24 @@ export function snowmanVoicePath(cue: SnowmanVoiceCue, base = import.meta.env.BA
   return `${base}audio/voices/snowman/${cue}.mp3`;
 }
 
+export type GiruVoiceCue = "nitro" | "overtake-first" | "rage" | "special" | "attack";
+
+export function giruVoicePath(cue: GiruVoiceCue, base = import.meta.env.BASE_URL): string {
+  return `${base}audio/voices/giru/${cue}.mp3`;
+}
+
+export type YetiVoiceCue = "nitro" | "overtake-first" | "rage" | "special" | "attack";
+
+export function yetiVoicePath(cue: YetiVoiceCue, base = import.meta.env.BASE_URL): string {
+  return `${base}audio/voices/yeti/${cue}.mp3`;
+}
+
+export type GuyVoiceCue = "nitro" | "overtake-first" | "rage" | "special" | "attack";
+
+export function guyVoicePath(cue: GuyVoiceCue, base = import.meta.env.BASE_URL): string {
+  return `${base}audio/voices/guy/${cue}.mp3`;
+}
+
 export class AudioManager {
   private context: AudioContext | null = null;
   private windGain: GainNode | null = null;
@@ -104,15 +122,28 @@ export class AudioManager {
   }
 
   playSnowmanVoice(cue: SnowmanVoiceCue): void {
+    this.playVoice(snowmanVoicePath(cue));
+  }
+
+  playGiruVoice(cue: GiruVoiceCue): void {
+    this.playVoice(giruVoicePath(cue));
+  }
+
+  playYetiVoice(cue: YetiVoiceCue): void {
+    this.playVoice(yetiVoicePath(cue));
+  }
+
+  playGuyVoice(cue: GuyVoiceCue): void {
+    this.playVoice(guyVoicePath(cue));
+  }
+
+  private playVoice(path: string): void {
     if (!this.context || !this.master) return;
+    if (this.voice) return;
     this.voiceSequence += 1;
     const sequence = this.voiceSequence;
-    if (this.voice) {
-      this.voice.pause();
-      this.voice.currentTime = 0;
-    }
 
-    const voice = new Audio(snowmanVoicePath(cue));
+    const voice = new Audio(path);
     voice.preload = "auto";
     voice.volume = this.musicVolume;
     this.context.createMediaElementSource(voice).connect(this.master);
