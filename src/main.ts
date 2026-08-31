@@ -21,6 +21,9 @@ type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "resul
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 type SnowballSpecial = { active: boolean; owner: CharacterId; s: number; x: number; lap: number; hit: Set<CharacterId> };
 
+const query = new URLSearchParams(window.location.search);
+const playerSpecialTest = query.has("special-test");
+
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
 const hud = document.querySelector<HTMLElement>("#hud")!;
 const menu = document.querySelector<HTMLElement>("#menu")!;
@@ -45,7 +48,7 @@ async function requestLandscape(): Promise<void> {
 }
 
 function requestMobileFullscreen(): void {
-  if (new URLSearchParams(window.location.search).has("layout-test")) return;
+  if (query.has("layout-test")) return;
   if (!input.touchEnabled || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
   void document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
 }
@@ -556,13 +559,13 @@ specialCutIn.addEventListener("animationend", () => {
 
 function useCharacterSpecial(): void {
   const special = SPECIALS[selectedCharacter];
-  if (state.credits < special.cost) {
+  if (!playerSpecialTest && state.credits < special.cost) {
     input.pulse(.12, .18, 80);
     showToast(`FALTAM ${special.cost - state.credits} MOEDAS`, "coin");
     return;
   }
   if (state.finished || state.liftTime > 0 || state.recovering > 0) return;
-  state.credits -= special.cost;
+  if (!playerSpecialTest) state.credits -= special.cost;
   input.pulse(.82, .92, 360);
   showSpecialCutIn(selectedCharacter);
   playSnowmanVoice("special");
@@ -700,14 +703,15 @@ function updateHud(force = false): void {
   itemHud.classList.toggle("active", Boolean(state.item));
   itemHud.setAttribute("aria-label", activeItem ? `Item equipado: ${activeItem}. Use com R3.` : "Slot de item vazio");
   const special = SPECIALS[selectedCharacter];
+  const specialReady = playerSpecialTest || state.credits >= special.cost;
   specialArt.src = `${import.meta.env.BASE_URL}images/specials/${selectedCharacter}.png`;
   specialHud.dataset.character = selectedCharacter;
-  specialHud.classList.toggle("ready", state.credits >= special.cost);
-  specialHud.setAttribute("aria-label", `${special.name}. Custa ${special.cost} moedas. Use com L3.`);
-  specialHud.style.setProperty("--special-progress", `${Math.min(100, state.credits / special.cost * 100).toFixed(1)}%`);
+  specialHud.classList.toggle("ready", specialReady);
+  specialHud.setAttribute("aria-label", playerSpecialTest ? `${special.name}. Modo de teste: sempre disponível. Use com L3.` : `${special.name}. Custa ${special.cost} moedas. Use com L3.`);
+  specialHud.style.setProperty("--special-progress", `${playerSpecialTest ? 100 : Math.min(100, state.credits / special.cost * 100).toFixed(1)}%`);
   specialProgress.setAttribute("aria-valuemin", "0");
   specialProgress.setAttribute("aria-valuemax", String(special.cost));
-  specialProgress.setAttribute("aria-valuenow", String(Math.min(special.cost, state.credits)));
+  specialProgress.setAttribute("aria-valuenow", String(playerSpecialTest ? special.cost : Math.min(special.cost, state.credits)));
   boostFx.classList.toggle("active", state.turboTime > 0 || state.specialTurboTime > 0);
   boostFx.classList.toggle("special", state.specialTurboTime > 0);
   const target = state.item === "wind" ? findWindTarget() : null;
@@ -727,7 +731,11 @@ function updateControllerStatus(): void {
     ? "Controles touch prontos · jogue na horizontal"
     : input.usingDevFallback ? "Fallback de teclado habilitado para desenvolvimento"
     : input.connected ? `Controle incompatível: ${input.gamepadName}` : "Conecte o DualSense e pressione um botão";
-  $("#dev-badge").classList.toggle("hidden", !input.usingDevFallback || screen !== "playing");
+  const devBadge = $("#dev-badge");
+  devBadge.textContent = playerSpecialTest
+    ? `MODO TESTE · ESPECIAL LIVRE${input.usingDevFallback ? " · TECLADO" : ""}`
+    : "MODO DEV · TECLADO";
+  devBadge.classList.toggle("hidden", screen !== "playing" || (!input.usingDevFallback && !playerSpecialTest));
   $("#dev-hint").classList.toggle("hidden", input.usingDevFallback);
   if (screen === "playing" && !available) pause(true);
   if (screen === "paused" && disconnectedPause && (input.compatible || input.touchEnabled)) ($("#resume-button") as HTMLButtonElement).disabled = false;

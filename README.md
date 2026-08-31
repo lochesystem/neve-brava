@@ -19,6 +19,12 @@ Abra o endereço exibido pelo Vite, conecte um DualSense por USB ou Bluetooth e 
 http://127.0.0.1:5173/?dev=1
 ```
 
+Para testar os especiais sem acumular moedas, ative `special-test`. A flag libera permanentemente apenas o especial do jogador; os oponentes continuam respeitando coleta e custo normalmente:
+
+```text
+http://127.0.0.1:5173/?dev=1&special-test=1
+```
+
 ## Controles
 
 | Ação | DualSense | Fallback `?dev=1` |
@@ -32,6 +38,7 @@ http://127.0.0.1:5173/?dev=1
 | Flip | △ | C |
 | Preparar pouso | ○ | X |
 | Usar item | R3 | R |
+| Usar especial | L3 | T |
 | Pausa | Options | Esc |
 
 ## Gates
