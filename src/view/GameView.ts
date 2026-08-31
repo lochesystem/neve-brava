@@ -306,6 +306,17 @@ function createFreezeShell(): THREE.Group {
   return shell;
 }
 
+function createShieldBubble(): THREE.Mesh {
+  const shield = new THREE.Mesh(
+    new THREE.SphereGeometry(1.55, 18, 12),
+    new THREE.MeshBasicMaterial({ color: 0x73e0d0, transparent: true, opacity: .18, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  shield.position.y = 1.12;
+  shield.visible = false;
+  shield.renderOrder = 14;
+  return shield;
+}
+
 function createItemBox(item: ItemKind): THREE.Group {
   const group = new THREE.Group();
   const body = outlined(new THREE.BoxGeometry(1.75, 1.65, 1.75), itemColor(item));
@@ -613,10 +624,9 @@ export class GameView {
     new THREE.CircleGeometry(0.86, 20),
     new THREE.MeshBasicMaterial({ color: 0x35516a, transparent: true, opacity: 0.2, depthWrite: false }),
   );
-  private riderShield = new THREE.Mesh(
-    new THREE.SphereGeometry(1.55, 18, 12),
-    new THREE.MeshBasicMaterial({ color: 0x73e0d0, transparent: true, opacity: .18, depthWrite: false, side: THREE.DoubleSide }),
-  );
+  private riderShield = createShieldBubble();
+  private riderSlowAura = createSlowAura();
+  private riderFreezeShell = createFreezeShell();
   private coinVisuals: Array<{ id: string; object: THREE.Group; baseY: number; heading: number; phase: number }> = [];
   private boxVisuals: Array<{ id: string; object: THREE.Group; shadow: THREE.Mesh; baseY: number; heading: number; phase: number }> = [];
   private itemBoxModel: THREE.Group | null = null;
@@ -693,9 +703,7 @@ export class GameView {
     this.riderVisual.position.y = -1.18;
     this.riderTumblePivot.add(this.riderVisual);
     this.rider.add(this.riderTumblePivot);
-    this.riderShield.position.y = 1.12;
-    this.riderShield.visible = false;
-    this.rider.add(this.riderShield);
+    this.rider.add(this.riderShield, this.riderSlowAura, this.riderFreezeShell);
     this.rival.add(this.rivalVisual);
     this.guy.add(this.guyVisual);
     this.giru.add(this.giruVisual);
@@ -705,12 +713,18 @@ export class GameView {
     this.rival.userData.freezeShell = createFreezeShell();
     this.guy.userData.freezeShell = createFreezeShell();
     this.giru.userData.freezeShell = createFreezeShell();
+    this.rival.userData.shield = createShieldBubble();
+    this.guy.userData.shield = createShieldBubble();
+    this.giru.userData.shield = createShieldBubble();
     this.rival.add(this.rival.userData.slowAura as THREE.Group);
     this.guy.add(this.guy.userData.slowAura as THREE.Group);
     this.giru.add(this.giru.userData.slowAura as THREE.Group);
     this.rival.add(this.rival.userData.freezeShell as THREE.Group);
     this.guy.add(this.guy.userData.freezeShell as THREE.Group);
     this.giru.add(this.giru.userData.freezeShell as THREE.Group);
+    this.rival.add(this.rival.userData.shield as THREE.Mesh);
+    this.guy.add(this.guy.userData.shield as THREE.Mesh);
+    this.giru.add(this.giru.userData.shield as THREE.Mesh);
     this.rivalShadow.rotation.x = -Math.PI / 2;
     this.rivalShadow.scale.set(1.9, .7, 1);
     this.guyShadow.rotation.x = -Math.PI / 2;
@@ -1296,6 +1310,23 @@ export class GameView {
       this.riderShield.scale.setScalar(pulse);
       (this.riderShield.material as THREE.MeshBasicMaterial).opacity = .14 + Math.sin(this.elapsedVisual * 8) * .045;
     }
+    this.riderSlowAura.visible = state.slowTime > 0 || state.timeWarpTime > 0;
+    if (this.riderSlowAura.visible) {
+      this.riderSlowAura.rotation.y += dt * 2.8;
+      const pulse = 1 + Math.sin(this.elapsedVisual * 9) * .08;
+      this.riderSlowAura.scale.setScalar(pulse);
+      this.riderSlowAura.children.forEach((child, index) => {
+        const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+        if (material?.color) material.color.setHex(state.timeWarpTime > 0 ? 0xa95de8 : 0x9fe7ff);
+        if (index < 2) child.rotation.z += dt * (index ? -1.9 : 2.3);
+        else child.position.y = child.userData.baseY + Math.sin(this.elapsedVisual * 6 + child.userData.phase) * .12;
+      });
+    }
+    this.riderFreezeShell.visible = state.freezeTime > 0;
+    if (this.riderFreezeShell.visible) {
+      this.riderFreezeShell.rotation.y += dt * .7;
+      this.riderFreezeShell.scale.setScalar(1 + Math.sin(this.elapsedVisual * 5) * .025);
+    }
     if (state.recovering > 0 && Math.random() < dt * (this.quality === "performance" ? 20 : 42)) {
       const origin = new THREE.Vector3(world.x, groundY + 0.16, world.z);
       const spray = new THREE.Vector3(
@@ -1327,7 +1358,7 @@ export class GameView {
     this.renderer.render(this.scene, this.camera);
   }
 
-  windShot(rider: RiderState, target: RivalState): void {
+  windShot(rider: Pick<RiderState, "s" | "x" | "y">, target: Pick<RiderState, "s" | "x" | "y">): void {
     const startWorld = courseWorldPoint(rider.s, rider.x);
     const endWorld = courseWorldPoint(target.s, target.x);
     const start = new THREE.Vector3(startWorld.x, rider.y + .75, startWorld.z);
@@ -1354,7 +1385,7 @@ export class GameView {
     }
   }
 
-  specialPulse(rider: RiderState, kind: "yeti" | "giru"): void {
+  specialPulse(rider: Pick<RiderState, "s" | "x">, kind: "yeti" | "giru"): void {
     const centerWorld = courseWorldPoint(rider.s, rider.x);
     const center = new THREE.Vector3(centerWorld.x, courseTerrainHeight(rider.s, rider.x) + .2, centerWorld.z);
     const color = kind === "yeti" ? 0xbceeff : 0xaf65ed;
@@ -1574,6 +1605,13 @@ export class GameView {
       freezeShell.rotation.y += dt * .7;
       const frozenPulse = 1 + Math.sin(this.elapsedVisual * 5 + state.linePhase) * .025;
       freezeShell.scale.setScalar(frozenPulse);
+    }
+    const shield = group.userData.shield as THREE.Mesh;
+    shield.visible = group.visible && state.shieldTime > 0;
+    if (shield.visible) {
+      const shieldPulse = 1 + Math.sin(this.elapsedVisual * 8 + state.linePhase) * .035;
+      shield.scale.setScalar(shieldPulse);
+      (shield.material as THREE.MeshBasicMaterial).opacity = .14 + Math.sin(this.elapsedVisual * 8 + state.linePhase) * .045;
     }
     const airGap = Math.max(0, surfaceOffset);
     shadow.position.set(world.x, groundY + .04, world.z);

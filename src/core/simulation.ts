@@ -90,6 +90,9 @@ export type RiderState = {
   turboTime: number;
   specialTurboTime: number;
   shieldTime: number;
+  slowTime: number;
+  timeWarpTime: number;
+  freezeTime: number;
   collectedCoins: string[];
   collectedBoxes: string[];
   score: number;
@@ -140,6 +143,9 @@ export function createRider(): RiderState {
     turboTime: 0,
     specialTurboTime: 0,
     shieldTime: 0,
+    slowTime: 0,
+    timeWarpTime: 0,
+    freezeTime: 0,
     collectedCoins: [],
     collectedBoxes: [],
     score: 0,
@@ -212,6 +218,53 @@ function crash(state: RiderState, events: GameEvent[], obstacle?: string, force 
   state.verticalSpeed = 0;
   state.grounded = false;
   events.push({ type: "CRASH", obstacle });
+}
+
+function absorbAttackWithShield(state: RiderState, events: GameEvent[]): boolean {
+  if (state.shieldTime <= 0) return false;
+  state.shieldTime = 0;
+  state.invulnerable = .65;
+  events.push({ type: "SHIELD_BREAK" });
+  return true;
+}
+
+export function applyRiderWindHit(state: RiderState): GameEvent[] {
+  const events: GameEvent[] = [];
+  if (state.finished || state.liftTime > 0 || state.recovering > 0 || state.invulnerable > 0) return events;
+  if (absorbAttackWithShield(state, events)) return events;
+  crash(state, events, "wind", true);
+  return events;
+}
+
+export function applyRiderBlizzardSlow(state: RiderState): GameEvent[] {
+  const events: GameEvent[] = [];
+  if (state.finished || state.liftTime > 0 || state.invulnerable > 0) return events;
+  if (absorbAttackWithShield(state, events)) return events;
+  state.slowTime = Math.max(state.slowTime, 4.2);
+  state.speed = Math.max(16, state.speed * .82);
+  return events;
+}
+
+export function applyRiderTimeWarp(state: RiderState): GameEvent[] {
+  const events: GameEvent[] = [];
+  if (state.finished || state.liftTime > 0 || state.invulnerable > 0) return events;
+  if (absorbAttackWithShield(state, events)) return events;
+  state.timeWarpTime = Math.max(state.timeWarpTime, 5);
+  state.speed = Math.max(7, state.speed * .35);
+  return events;
+}
+
+export function applyRiderFreeze(state: RiderState): GameEvent[] {
+  const events: GameEvent[] = [];
+  if (state.finished || state.liftTime > 0 || state.invulnerable > 0) return events;
+  if (absorbAttackWithShield(state, events)) return events;
+  state.freezeTime = Math.max(state.freezeTime, 2);
+  state.speed = 0;
+  state.lateralSpeed = 0;
+  state.grounded = true;
+  state.verticalSpeed = 0;
+  state.y = courseHeight(state.s) + .46;
+  return events;
 }
 
 function updatePickups(state: RiderState, previousS: number, events: GameEvent[], racePosition: number, random: () => number): void {
@@ -349,6 +402,9 @@ function beginNextLap(state: RiderState): void {
   state.recovering = 0;
   state.tumbleTime = 0;
   state.invulnerable = 1;
+  state.slowTime = 0;
+  state.timeWarpTime = 0;
+  state.freezeTime = 0;
   state.collectedCoins = [];
   state.collectedBoxes = [];
   state.lastSafeS = 0;
@@ -365,6 +421,9 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
   state.turboTime = Math.max(0, state.turboTime - step);
   state.specialTurboTime = Math.max(0, state.specialTurboTime - step);
   state.shieldTime = Math.max(0, state.shieldTime - step);
+  state.slowTime = Math.max(0, state.slowTime - step);
+  state.timeWarpTime = Math.max(0, state.timeWarpTime - step);
+  state.freezeTime = Math.max(0, state.freezeTime - step);
 
   if (state.liftTime > 0) {
     state.liftTime = Math.max(0, state.liftTime - step);
@@ -372,6 +431,15 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
       beginNextLap(state);
       events.push({ type: "LAP", lap: state.lap });
     }
+    return events;
+  }
+
+  if (state.freezeTime > 0) {
+    state.speed = 0;
+    state.lateralSpeed = 0;
+    state.grounded = true;
+    state.verticalSpeed = 0;
+    state.y = courseHeight(state.s) + .46;
     return events;
   }
 
@@ -402,7 +470,11 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
     const edgeDrag = Math.max(0, Math.abs(state.x) - 13.5) * 0.72;
     const acceleration = 5.8 + intent.tuck * 8.5 - intent.brake * 15 - state.carve * state.carve * 2.2 - edgeDrag + (state.specialTurboTime > 0 ? 72 : state.turboTime > 0 ? 25 : 0);
     const acceleratedSpeed = state.speed + acceleration * step;
-    state.speed = state.specialTurboTime > 0
+    state.speed = state.timeWarpTime > 0
+      ? approach(state.speed, 9, 38 * step)
+      : state.slowTime > 0
+      ? approach(state.speed, Math.min(state.speed, 30), 14 * step)
+      : state.specialTurboTime > 0
       ? clamp(acceleratedSpeed, 12, 90)
       : state.turboTime > 0
       ? clamp(acceleratedSpeed, 12, 58)
@@ -414,7 +486,11 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
     if (intent.jumpReleased && state.jumpCharge > 0.08) beginAir(state, 5.8 + state.jumpCharge * 4.8, false, events);
   } else {
     const airborneSpeed = state.speed + (state.specialTurboTime > 0 ? 30 : state.turboTime > 0 ? 12 : .55) * step;
-    state.speed = state.specialTurboTime > 0
+    state.speed = state.timeWarpTime > 0
+      ? approach(state.speed, 9, 32 * step)
+      : state.slowTime > 0
+      ? approach(state.speed, Math.min(state.speed, 30), 12 * step)
+      : state.specialTurboTime > 0
       ? clamp(airborneSpeed, 12, 92)
       : state.turboTime > 0
       ? clamp(airborneSpeed, 12, 59)

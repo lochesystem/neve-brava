@@ -1,6 +1,7 @@
 import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
+  COINS,
   ITEM_BOXES,
   LIFT_TRANSITION_TIME,
   OBSTACLES,
@@ -16,12 +17,17 @@ import {
 import { clamp, lerp, wrapAngle } from "./math.ts";
 import type { RiderState } from "./simulation.ts";
 import type { CharacterId } from "./characters.ts";
+import { SPECIALS } from "./specials.ts";
 
 export type RivalEvent =
   | { type: "RIVAL_CRASH" }
   | { type: "RIVAL_TAKEOFF" }
   | { type: "RIVAL_LAND"; boost: number }
+  | { type: "RIVAL_COIN"; value: number; id: string }
   | { type: "RIVAL_ITEM"; item: ItemKind; id: string }
+  | { type: "RIVAL_ITEM_USED"; item: ItemKind }
+  | { type: "RIVAL_SPECIAL"; character: CharacterId }
+  | { type: "RIVAL_SHIELD_BREAK" }
   | { type: "RIVAL_LIFT"; nextLap: number }
   | { type: "RIVAL_LAP"; lap: number }
   | { type: "RIVAL_FINISH" };
@@ -50,6 +56,8 @@ export type RivalState = {
   stun: number;
   tumble: number;
   turboTime: number;
+  specialTurboTime: number;
+  shieldTime: number;
   slowTime: number;
   timeWarpTime: number;
   freezeTime: number;
@@ -63,6 +71,10 @@ export type RivalState = {
   contactCooldown: number;
   windHit: number;
   item: ItemKind | null;
+  credits: number;
+  specialDecisionTimer: number;
+  itemDecisionTimer: number;
+  collectedCoins: string[];
   collectedBoxes: string[];
 };
 
@@ -118,6 +130,8 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     stun: 0,
     tumble: 0,
     turboTime: 0,
+    specialTurboTime: 0,
+    shieldTime: 0,
     slowTime: 0,
     timeWarpTime: 0,
     freezeTime: 0,
@@ -131,6 +145,10 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     contactCooldown: 0,
     windHit: 0,
     item: null,
+    credits: 0,
+    specialDecisionTimer: 2.2 + profile.linePhase * .35,
+    itemDecisionTimer: 0,
+    collectedCoins: [],
     collectedBoxes: [],
   };
 }
@@ -152,6 +170,13 @@ function lineRisk(state: RivalState, candidate: number, preferredLine: number): 
     // Caixas são uma oportunidade para a IA, nunca um obstáculo pago.
     // O rival muda de linha para buscá-las sem consultar qualquer saldo.
     if (clearance < 3) risk -= (3 - clearance) * (1.55 - ahead / 145);
+  }
+  for (const coin of COINS) {
+    if (state.collectedCoins.includes(coin.id)) continue;
+    const ahead = coin.s - state.s;
+    if (ahead < 5 || ahead > 64) continue;
+    const clearance = Math.abs(candidate - coin.x) - 1.25;
+    if (clearance < 2.4) risk -= (2.4 - clearance) * (1.1 - ahead / 120);
   }
   // Cada perfil decide quanto vale abandonar a linha atual para buscar uma rampa.
   for (const ramp of RAMPS) {
@@ -192,26 +217,47 @@ function obstacleCollision(state: RivalState): boolean {
     && Math.abs(obstacle.x - state.x) < obstacle.radius + .72);
 }
 
-function collectItemBoxes(state: RivalState, previousS: number, events: RivalEvent[]): void {
+function collectItemBoxes(state: RivalState, previousS: number, events: RivalEvent[], racePosition: number, random: () => number): void {
   const heightAboveSnow = state.y - courseHeight(state.s);
   for (const box of ITEM_BOXES) {
     if (state.collectedBoxes.includes(box.id) || previousS >= box.s || state.s + .9 < box.s) continue;
     if (Math.abs(state.x - box.x) > box.radius + .72 || heightAboveSnow > box.height + .35) continue;
     state.collectedBoxes.push(box.id);
-    state.item = box.item;
-    // Turbo pode ser usado imediatamente pela IA; toda coleta é registrada
-    // sem consultar ou consumir moedas.
-    if (box.item === "turbo") {
+    const item: ItemKind = racePosition === 4 && random() < .4 ? "blizzard" : box.item;
+    state.item = item;
+    state.itemDecisionTimer = .18;
+    if (item === "turbo") {
       state.turboTime = Math.max(state.turboTime, 3.2);
       state.speed = Math.min(54, state.speed + 5);
       state.item = null;
+      events.push({ type: "RIVAL_ITEM_USED", item: "turbo" });
+    } else if (item === "shield") {
+      state.shieldTime = Math.max(state.shieldTime, 6);
+      state.item = null;
+      events.push({ type: "RIVAL_ITEM_USED", item: "shield" });
     }
-    events.push({ type: "RIVAL_ITEM", item: box.item, id: box.id });
+    events.push({ type: "RIVAL_ITEM", item, id: box.id });
+  }
+}
+
+function collectCoins(state: RivalState, previousS: number, events: RivalEvent[]): void {
+  const heightAboveSnow = state.y - courseHeight(state.s);
+  for (const coin of COINS) {
+    if (state.collectedCoins.includes(coin.id) || previousS >= coin.s || state.s + .9 < coin.s) continue;
+    if (Math.abs(state.x - coin.x) > 1.25 || heightAboveSnow > 2.8) continue;
+    state.collectedCoins.push(coin.id);
+    state.credits += coin.value;
+    events.push({ type: "RIVAL_COIN", value: coin.value, id: coin.id });
   }
 }
 
 export function applyWindHit(state: RivalState): boolean {
   if (state.finished || state.liftTime > 0 || state.stun > 0) return false;
+  if (state.shieldTime > 0) {
+    state.shieldTime = 0;
+    state.contactCooldown = Math.max(state.contactCooldown, .65);
+    return false;
+  }
   const direction = Math.sign(state.x) || (Math.sin(state.s + state.linePhase) > 0 ? 1 : -1);
   state.windHit = 1.05;
   state.stun = 1.05;
@@ -229,6 +275,7 @@ export function applyWindHit(state: RivalState): boolean {
 
 export function applyBlizzardSlow(state: RivalState): boolean {
   if (state.finished) return false;
+  if (state.shieldTime > 0) { state.shieldTime = 0; return false; }
   state.slowTime = Math.max(state.slowTime, 4.2);
   state.speed = Math.max(16, state.speed * .82);
   return true;
@@ -236,6 +283,7 @@ export function applyBlizzardSlow(state: RivalState): boolean {
 
 export function applyTimeWarp(state: RivalState): boolean {
   if (state.finished) return false;
+  if (state.shieldTime > 0) { state.shieldTime = 0; return false; }
   state.timeWarpTime = Math.max(state.timeWarpTime, 5);
   state.speed = Math.max(7, state.speed * .35);
   return true;
@@ -243,6 +291,7 @@ export function applyTimeWarp(state: RivalState): boolean {
 
 export function applyFreeze(state: RivalState): boolean {
   if (state.finished || state.liftTime > 0) return false;
+  if (state.shieldTime > 0) { state.shieldTime = 0; return false; }
   state.freezeTime = Math.max(state.freezeTime, 2);
   state.speed = 0;
   state.lateralSpeed = 0;
@@ -278,10 +327,14 @@ function beginNextLap(state: RivalState): void {
   state.contactCooldown = 1;
   state.windHit = 0;
   state.item = null;
+  state.specialTurboTime = 0;
+  state.shieldTime = 0;
+  state.itemDecisionTimer = 0;
+  state.collectedCoins = [];
   state.collectedBoxes = [];
 }
 
-export function updateRival(state: RivalState, playerProgress: number, playerX: number, dt: number): RivalEvent[] {
+export function updateRival(state: RivalState, playerProgress: number, playerX: number, dt: number, racePosition = 2, random: () => number = Math.random): RivalEvent[] {
   const events: RivalEvent[] = [];
   if (state.finished) return events;
   const step = clamp(dt, 0, 1 / 20);
@@ -289,6 +342,10 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
   state.contactCooldown = Math.max(0, state.contactCooldown - step);
   state.windHit = Math.max(0, state.windHit - step);
   state.turboTime = Math.max(0, state.turboTime - step);
+  state.specialTurboTime = Math.max(0, state.specialTurboTime - step);
+  state.shieldTime = Math.max(0, state.shieldTime - step);
+  state.specialDecisionTimer = Math.max(0, state.specialDecisionTimer - step);
+  state.itemDecisionTimer = Math.max(0, state.itemDecisionTimer - step);
   state.slowTime = Math.max(0, state.slowTime - step);
   state.timeWarpTime = Math.max(0, state.timeWarpTime - step);
   state.freezeTime = Math.max(0, state.freezeTime - step);
@@ -331,11 +388,37 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
 
   const coursePace = 45 + getActiveCourse().order * .35 + state.paceBias;
   const gap = playerProgress - raceProgress(state.lap, state.s);
+  if (state.item && state.itemDecisionTimer <= 0) {
+    const shouldUse = state.item === "blizzard" ? gap > -8 : state.item === "wind" ? gap > -5 && gap < 78 : true;
+    if (shouldUse) {
+      const item = state.item;
+      state.item = null;
+      state.itemDecisionTimer = 1.4;
+      if (item === "turbo") {
+        state.turboTime = Math.max(state.turboTime, 3.2);
+        state.speed = Math.min(54, state.speed + 5);
+      }
+      if (item === "shield") state.shieldTime = Math.max(state.shieldTime, 6);
+      events.push({ type: "RIVAL_ITEM_USED", item });
+    }
+  }
+  const special = SPECIALS[state.id];
+  if (state.credits >= special.cost && state.specialDecisionTimer <= 0 && state.elapsed > 4) {
+    state.credits -= special.cost;
+    state.specialDecisionTimer = 11 + state.linePhase;
+    if (state.id === "guy") {
+      state.specialTurboTime = 3;
+      state.speed = Math.max(state.speed, 58);
+    }
+    events.push({ type: "RIVAL_SPECIAL", character: state.id });
+  }
   // Recupera terreno com firmeza, mas desacelera quando abre vantagem para a
   // disputa continuar legível e não virar uma perseguição impossível.
   const catchUp = clamp(gap * .2, -2.1, 5.5);
   const rhythm = Math.sin(state.s * .018 + getActiveCourse().order) * .95;
-  const racingSpeed = clamp(coursePace + catchUp + rhythm + (state.turboTime > 0 ? 9 : 0), 37, state.turboTime > 0 ? 56 : 50.5);
+  const racingSpeed = state.specialTurboTime > 0
+    ? clamp(coursePace * 1.82 + catchUp + rhythm, 72, 90)
+    : clamp(coursePace + catchUp + rhythm + (state.turboTime > 0 ? 9 : 0), 37, state.turboTime > 0 ? 56 : 50.5);
   const targetSpeed = state.timeWarpTime > 0
     ? clamp(racingSpeed * .2, 7, 12)
     : state.slowTime > 0 ? clamp(racingSpeed * .66, 24, 33) : racingSpeed;
@@ -391,18 +474,26 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
     }
   }
 
-  collectItemBoxes(state, previousS, events);
+  collectItemBoxes(state, previousS, events, racePosition, random);
+  collectCoins(state, previousS, events);
 
   // A IA normalmente evita a linha ruim, mas ainda pode errar sob pressão.
   if (obstacleCollision(state)) {
-    state.stun = .82;
-    state.tumble = .01;
-    state.crashes += 1;
-    state.speed *= .58;
-    state.lateralSpeed *= -.25;
-    state.grounded = false;
-    state.verticalSpeed = 2.2;
-    events.push({ type: "RIVAL_CRASH" });
+    if (state.shieldTime > 0) {
+      state.shieldTime = 0;
+      state.contactCooldown = .65;
+      state.speed *= .9;
+      events.push({ type: "RIVAL_SHIELD_BREAK" });
+    } else {
+      state.stun = .82;
+      state.tumble = .01;
+      state.crashes += 1;
+      state.speed *= .58;
+      state.lateralSpeed *= -.25;
+      state.grounded = false;
+      state.verticalSpeed = 2.2;
+      events.push({ type: "RIVAL_CRASH" });
+    }
   }
 
   if (state.s >= COURSE_LENGTH) {
@@ -418,6 +509,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
       state.grounded = true;
       state.verticalSpeed = 0;
       state.turboTime = 0;
+      state.specialTurboTime = 0;
       events.push({ type: "RIVAL_LIFT", nextLap: state.lap + 1 });
     }
   }

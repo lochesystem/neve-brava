@@ -1,10 +1,14 @@
 import "./styles.css";
 import {
   COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
-  type CourseDefinition,
+  type CourseDefinition, type ItemKind,
 } from "./core/course.ts";
-import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
+import {
+  applyRiderBlizzardSlow, applyRiderFreeze, applyRiderTimeWarp, applyRiderWindHit,
+  createRider, interpolateRider, updateRider, type GameEvent, type RiderState,
+} from "./core/simulation.ts";
 import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
+import { SPECIALS } from "./core/specials.ts";
 import {
   applyBlizzardSlow, applyFreeze, applyTimeWarp, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
@@ -15,15 +19,7 @@ import { GameView, type Quality } from "./view/GameView.ts";
 
 type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
-type SpecialDefinition = { name: string; cost: number };
-type SnowballSpecial = { active: boolean; s: number; x: number; lap: number; hit: Set<CharacterId> };
-
-const SPECIALS: Record<CharacterId, SpecialDefinition> = {
-  snowman: { name: "BOLA GIGANTE", cost: 1_500 },
-  yeti: { name: "GRITO GLACIAL", cost: 1_000 },
-  guy: { name: "TURBO DUPLO", cost: 1_500 },
-  giru: { name: "TEMPO VIOLETA", cost: 1_800 },
-};
+type SnowballSpecial = { active: boolean; owner: CharacterId; s: number; x: number; lap: number; hit: Set<CharacterId> };
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
 const hud = document.querySelector<HTMLElement>("#hud")!;
@@ -101,7 +97,7 @@ let countdown = 3.35;
 let toastTimer = 0;
 let slowFxTimer = 0;
 let specialFxTimer = 0;
-let snowballSpecial: SnowballSpecial = { active: false, s: 0, x: 0, lap: 1, hit: new Set() };
+let snowballSpecial: SnowballSpecial = { active: false, owner: "snowman", s: 0, x: 0, lap: 1, hit: new Set() };
 let lastRacePosition = 1;
 let hudTimer = 0;
 let disconnectedPause = false;
@@ -247,8 +243,12 @@ function markerTransform(progress: number, lateral: number): string {
 }
 
 function currentRacePosition(): number {
-  const playerProgress = raceProgress(state.lap, state.s);
-  return 1 + [rival, guy, giru].filter(opponent => raceProgress(opponent.lap, opponent.s) > playerProgress + .35).length;
+  return racePositionOf(state);
+}
+
+function racePositionOf(racer: RiderState | RivalState): number {
+  const progress = raceProgress(racer.lap, racer.s);
+  return 1 + [state, rival, guy, giru].filter(candidate => candidate !== racer && raceProgress(candidate.lap, candidate.s) > progress + .35).length;
 }
 
 function updateMapMarker(): void {
@@ -366,7 +366,7 @@ function startRun(): void {
   previousGiru = { ...giru };
   view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   updateMapPortraits();
-  snowballSpecial = { active: false, s: 0, x: 0, lap: 1, hit: new Set() };
+  snowballSpecial = { active: false, owner: "snowman", s: 0, x: 0, lap: 1, hit: new Set() };
   lastRacePosition = 1;
   specialFxTimer = 0;
   specialFx.className = "special-fx";
@@ -437,6 +437,9 @@ function finish(): void {
 
 function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
   if (event.type === "RIVAL_CRASH" && Math.abs(opponent.s - state.s) < 55) showToast(`${opponent.name} TOMBOU!`, "near");
+  if (event.type === "RIVAL_SHIELD_BREAK" && Math.abs(opponent.s - state.s) < 65) showToast(`ESCUDO DO ${opponent.name} QUEBROU!`, "clean");
+  if (event.type === "RIVAL_ITEM_USED") useRivalItem(opponent, event.item);
+  if (event.type === "RIVAL_SPECIAL") useRivalSpecial(opponent);
   if (event.type === "RIVAL_FINISH" && !state.finished) {
     const position = [rival, guy, giru].filter(racer => racer.finished).length;
     showToast(position === 1 ? `${opponent.name} CHEGOU PRIMEIRO!` : `${opponent.name} CHEGOU EM ${position}º!`, "crash");
@@ -444,6 +447,72 @@ function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
 }
 
 function opponents(): RivalState[] { return [rival, guy, giru]; }
+
+function handleAppliedRiderEvents(events: GameEvent[]): void {
+  events.forEach(handleEvent);
+}
+
+function findRivalWindTarget(source: RivalState): { racer: RiderState | RivalState; player: boolean; distance: number } | null {
+  const candidates: Array<{ racer: RiderState | RivalState; player: boolean }> = [
+    ...(selectedCharacter === source.id ? [] : [{ racer: state, player: true }]),
+    ...opponents().filter(candidate => candidate !== source).map(candidate => ({ racer: candidate, player: false })),
+  ];
+  return candidates
+    .filter(candidate => !candidate.racer.finished && candidate.racer.liftTime <= 0 && candidate.racer.lap === source.lap)
+    .map(candidate => ({ ...candidate, distance: Math.hypot(candidate.racer.s - source.s, (candidate.racer.x - source.x) * 1.35) }))
+    .filter(candidate => candidate.racer.s >= source.s - 5 && candidate.distance <= WIND_RANGE)
+    .sort((first, second) => first.distance - second.distance)[0] ?? null;
+}
+
+function useRivalItem(source: RivalState, item: ItemKind): void {
+  if (item === "turbo" || item === "shield") {
+    if (Math.abs(source.s - state.s) < 52) showToast(`${source.name} USOU ${item === "turbo" ? "TURBO" : "ESCUDO"}!`, item === "turbo" ? "coin" : "clean");
+    return;
+  }
+  if (item === "wind") {
+    const target = findRivalWindTarget(source);
+    if (!target) return;
+    if (target.player) {
+      const events = applyRiderWindHit(state);
+      view.windShot(source, state);
+      handleAppliedRiderEvents(events);
+    } else {
+      const shielded = (target.racer as RivalState).shieldTime > 0;
+      const hit = applyWindHit(target.racer as RivalState);
+      view.windShot(source, target.racer);
+      if (!hit && shielded) showToast(`ESCUDO DO ${(target.racer as RivalState).name} SALVOU!`, "clean");
+    }
+    showToast(`${source.name} DISPAROU VENTO!`, "wind");
+    return;
+  }
+  const rivals = opponents().filter(candidate => candidate !== source);
+  rivals.forEach(applyBlizzardSlow);
+  handleAppliedRiderEvents(applyRiderBlizzardSlow(state));
+  slowFxTimer = 1.35;
+  slowFx.classList.add("active");
+  showToast(`${source.name} USOU NEVASCA!`, "wind");
+}
+
+function useRivalSpecial(source: RivalState): void {
+  showSpecialCutIn(source.id);
+  if (source.id === "snowman") {
+    snowballSpecial = { active: true, owner: source.id, s: source.s, x: 0, lap: source.lap, hit: new Set() };
+    activateSpecialFx("snowman", .75);
+  } else if (source.id === "yeti") {
+    opponents().filter(candidate => candidate !== source && !candidate.finished).forEach(applyWindHit);
+    handleAppliedRiderEvents(applyRiderWindHit(state));
+    view.specialPulse(source, "yeti");
+    activateSpecialFx("yeti", 1.35);
+  } else if (source.id === "guy") {
+    activateSpecialFx("guy", 3);
+  } else {
+    opponents().filter(candidate => candidate !== source).forEach(applyTimeWarp);
+    handleAppliedRiderEvents(applyRiderTimeWarp(state));
+    view.specialPulse(source, "giru");
+    activateSpecialFx("giru", 3);
+  }
+  showToast(`${source.name} · ${SPECIALS[source.id].name}!`, source.id === "giru" ? "wind" : "clean");
+}
 
 function activateSpecialFx(character: CharacterId, duration: number): void {
   specialFxTimer = duration;
@@ -502,7 +571,7 @@ function useCharacterSpecial(): void {
   playGuyVoice("special");
 
   if (selectedCharacter === "snowman") {
-    snowballSpecial = { active: true, s: state.s, x: 0, lap: state.lap, hit: new Set() };
+    snowballSpecial = { active: true, owner: selectedCharacter, s: state.s, x: 0, lap: state.lap, hit: new Set() };
     activateSpecialFx("snowman", .75);
   } else if (selectedCharacter === "yeti") {
     opponents().filter(opponent => !opponent.finished).forEach(applyWindHit);
@@ -524,7 +593,13 @@ function updateSnowballSpecial(step: number): void {
   if (!snowballSpecial.active) return;
   const previousS = snowballSpecial.s;
   snowballSpecial.s = Math.min(COURSE_LENGTH, snowballSpecial.s + 220 * step);
+  if (selectedCharacter !== snowballSpecial.owner && state.lap === snowballSpecial.lap && !snowballSpecial.hit.has(selectedCharacter)
+    && state.s >= previousS - 6 && state.s <= snowballSpecial.s + 3) {
+    handleAppliedRiderEvents(applyRiderFreeze(state));
+    snowballSpecial.hit.add(selectedCharacter);
+  }
   for (const opponent of opponents()) {
+    if (opponent.id === snowballSpecial.owner) continue;
     if (snowballSpecial.hit.has(opponent.id) || opponent.finished || opponent.lap !== snowballSpecial.lap) continue;
     if (opponent.s < previousS - 6 || opponent.s > snowballSpecial.s + 3) continue;
     if (applyFreeze(opponent)) snowballSpecial.hit.add(opponent.id);
@@ -740,11 +815,11 @@ function frame(now: number): void {
         previousGuy = { ...guy };
         previousGiru = { ...giru };
         for (const event of updateRider(state, stepIntent, fixedStep, currentRacePosition())) handleEvent(event);
-        for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep)) handleRivalEvent(event, rival);
+        for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep, racePositionOf(rival))) handleRivalEvent(event, rival);
         const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
-        for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep)) handleRivalEvent(event, guy);
+        for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep, racePositionOf(guy))) handleRivalEvent(event, guy);
         const frontRunner = raceProgress(guy.lap, guy.s) > raceProgress(leader.lap, leader.s) ? guy : leader;
-        for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep)) handleRivalEvent(event, giru);
+        for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep, racePositionOf(giru))) handleRivalEvent(event, giru);
         if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);

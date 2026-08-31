@@ -1,8 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { COINS, COURSE_LENGTH, ITEM_BOXES, LIFT_TRANSITION_TIME, OBSTACLES, RACE_LAPS, RAMPS, courseHeight, courseSlope, rampHeight, rampLength } from "../src/core/course.ts";
-import { EMPTY_INTENT, createRider, interpolateRider, updateRider } from "../src/core/simulation.ts";
+import { applyRiderFreeze, applyRiderTimeWarp, applyRiderWindHit, EMPTY_INTENT, createRider, interpolateRider, updateRider } from "../src/core/simulation.ts";
 
 describe("simulação da prancha", () => {
+  it("escudo anula ataque da IA e congelamento realmente segura o jogador", () => {
+    const shielded = createRider();
+    shielded.shieldTime = 4;
+    expect(applyRiderWindHit(shielded)).toContainEqual({ type: "SHIELD_BREAK" });
+    expect(shielded.recovering).toBe(0);
+
+    const frozen = createRider();
+    frozen.s = 50;
+    applyRiderFreeze(frozen);
+    for (let index = 0; index < 60; index += 1) updateRider(frozen, { ...EMPTY_INTENT, tuck: 1 }, 1 / 60);
+    expect(frozen.s).toBe(50);
+    expect(frozen.freezeTime).toBeGreaterThan(.9);
+  });
+
+  it("especial temporal da Giru mantém o jogador lento por cinco segundos", () => {
+    const rider = createRider();
+    rider.speed = 45;
+    applyRiderTimeWarp(rider);
+    for (let index = 0; index < 60; index += 1) updateRider(rider, { ...EMPTY_INTENT, tuck: 1 }, 1 / 60);
+    expect(rider.timeWarpTime).toBeGreaterThan(3.9);
+    expect(rider.speed).toBeLessThan(13);
+  });
   it("acelera com tuck sem ultrapassar o limite", () => {
     const rider = createRider();
     for (let index = 0; index < 1_200; index += 1) updateRider(rider, { ...EMPTY_INTENT, tuck: 1 }, 1 / 60);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
+import { COINS, COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, RACE_LAPS, courseHeight, raceProgress, setActiveCourse } from "../src/core/course.ts";
 import {
   applyBlizzardSlow, applyFreeze, applyTimeWarp, applyWindHit, createRival, GUY_PROFILE, interpolateRival, resolveRivalContact, updateRival, YETI_PROFILE,
 } from "../src/core/rival.ts";
@@ -176,5 +176,58 @@ describe("rivais", () => {
     expect(guy.stun).toBe(0);
     expect(guy.crashes).toBe(0);
     if (box.item === "turbo") expect(guy.turboTime).toBeGreaterThan(3);
+  });
+
+  it("coleta moedas e gasta a carga no especial próprio", () => {
+    const coin = COINS[0];
+    const yeti = createRival(YETI_PROFILE);
+    yeti.s = coin.s - .35;
+    yeti.x = coin.x;
+    yeti.targetX = coin.x;
+    yeti.decisionTimer = 1;
+    yeti.speed = 24;
+    const coinEvents = updateRival(yeti, raceProgress(yeti.lap, yeti.s), yeti.x, 1 / 20);
+    expect(coinEvents).toContainEqual({ type: "RIVAL_COIN", value: coin.value, id: coin.id });
+    expect(yeti.credits).toBe(coin.value);
+
+    yeti.credits = 1_000;
+    yeti.elapsed = 5;
+    yeti.specialDecisionTimer = 0;
+    const specialEvents = updateRival(yeti, raceProgress(yeti.lap, yeti.s) + 12, 0, 1 / 60);
+    expect(specialEvents).toContainEqual({ type: "RIVAL_SPECIAL", character: "yeti" });
+    expect(yeti.credits).toBe(0);
+  });
+
+  it("consome vento com alvo à frente e ativa escudo assim que o coleta", () => {
+    const guy = createRival(GUY_PROFILE);
+    guy.elapsed = 2;
+    guy.item = "wind";
+    guy.itemDecisionTimer = 0;
+    const windEvents = updateRival(guy, raceProgress(guy.lap, guy.s) + 30, 0, 1 / 60);
+    expect(windEvents).toContainEqual({ type: "RIVAL_ITEM_USED", item: "wind" });
+    expect(guy.item).toBeNull();
+
+    guy.item = "shield";
+    guy.itemDecisionTimer = 0;
+    const shieldEvents = updateRival(guy, raceProgress(guy.lap, guy.s), 0, 1 / 60);
+    expect(shieldEvents).toContainEqual({ type: "RIVAL_ITEM_USED", item: "shield" });
+    expect(guy.shieldTime).toBeGreaterThan(5.9);
+  });
+
+  it("também pode receber e usar a nevasca quando está em último", () => {
+    const box = ITEM_BOXES[0];
+    const yeti = createRival(YETI_PROFILE);
+    yeti.s = box.s - .35;
+    yeti.x = box.x;
+    yeti.targetX = box.x;
+    yeti.decisionTimer = 1;
+    yeti.speed = 24;
+    const pickupEvents = updateRival(yeti, raceProgress(yeti.lap, yeti.s) + 20, yeti.x, 1 / 20, 4, () => .39);
+    expect(pickupEvents).toContainEqual({ type: "RIVAL_ITEM", item: "blizzard", id: box.id });
+    for (let index = 0; index < 5; index += 1) {
+      const events = updateRival(yeti, raceProgress(yeti.lap, yeti.s) + 20, yeti.x, 1 / 20, 4, () => 1);
+      if (events.some(event => event.type === "RIVAL_ITEM_USED" && event.item === "blizzard")) return;
+    }
+    throw new Error("A IA não consumiu a nevasca coletada.");
   });
 });
