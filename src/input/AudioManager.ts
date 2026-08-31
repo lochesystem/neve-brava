@@ -10,6 +10,12 @@ export function menuMusicPath(base = import.meta.env.BASE_URL): string {
   return `${base}audio/main-menu-theme.mp3`;
 }
 
+export type SnowmanVoiceCue = "nitro" | "overtake-first" | "hit" | "special" | "wind-hit";
+
+export function snowmanVoicePath(cue: SnowmanVoiceCue, base = import.meta.env.BASE_URL): string {
+  return `${base}audio/voices/snowman/${cue}.mp3`;
+}
+
 export class AudioManager {
   private context: AudioContext | null = null;
   private windGain: GainNode | null = null;
@@ -17,12 +23,15 @@ export class AudioManager {
   private master: GainNode | null = null;
   private music: HTMLAudioElement | null = null;
   private musicGain: GainNode | null = null;
+  private voice: HTMLAudioElement | null = null;
+  private voiceSequence = 0;
   private musicVolume = 0.38;
   private courseOrder = 1;
   private musicMode: "menu" | "course" = "menu";
 
   setMenuTrack(): void {
     if (this.musicMode === "menu") return;
+    this.stopVoice();
     this.musicMode = "menu";
     this.replaceMusic(menuMusicPath());
   }
@@ -91,6 +100,37 @@ export class AudioManager {
     if (this.musicGain && this.context) {
       this.musicGain.gain.setTargetAtTime(this.musicVolume, this.context.currentTime, 0.04);
     }
+    if (this.voice) this.voice.volume = this.musicVolume;
+  }
+
+  playSnowmanVoice(cue: SnowmanVoiceCue): void {
+    if (!this.context || !this.master) return;
+    this.voiceSequence += 1;
+    const sequence = this.voiceSequence;
+    if (this.voice) {
+      this.voice.pause();
+      this.voice.currentTime = 0;
+    }
+
+    const voice = new Audio(snowmanVoicePath(cue));
+    voice.preload = "auto";
+    voice.volume = this.musicVolume;
+    this.context.createMediaElementSource(voice).connect(this.master);
+    this.voice = voice;
+
+    const finish = (): void => {
+      if (sequence !== this.voiceSequence) return;
+      this.voice = null;
+    };
+    voice.addEventListener("ended", finish, { once: true });
+    voice.addEventListener("error", finish, { once: true });
+    void this.context.resume().then(() => voice.play()).catch(finish);
+  }
+
+  private stopVoice(): void {
+    this.voiceSequence += 1;
+    this.voice?.pause();
+    this.voice = null;
   }
 
   update(state: RiderState): void {

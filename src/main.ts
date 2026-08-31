@@ -10,7 +10,7 @@ import {
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
-import { AudioManager } from "./input/AudioManager.ts";
+import { AudioManager, type SnowmanVoiceCue } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
 
 type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
@@ -102,6 +102,7 @@ let toastTimer = 0;
 let slowFxTimer = 0;
 let specialFxTimer = 0;
 let snowballSpecial: SnowballSpecial = { active: false, s: 0, x: 0, startS: 0, lap: 1, hit: new Set() };
+let lastRacePosition = 1;
 let hudTimer = 0;
 let disconnectedPause = false;
 let lastIntentLook = 0;
@@ -362,6 +363,7 @@ function startRun(): void {
   view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   updateMapPortraits();
   snowballSpecial = { active: false, s: 0, x: 0, startS: 0, lap: 1, hit: new Set() };
+  lastRacePosition = 1;
   specialFxTimer = 0;
   specialFx.className = "special-fx";
   view.setSelectionMode(false);
@@ -445,6 +447,10 @@ function activateSpecialFx(character: CharacterId, duration: number): void {
   specialFx.classList.add("active");
 }
 
+function playSnowmanVoice(cue: SnowmanVoiceCue): void {
+  if (selectedCharacter === "snowman") audio.playSnowmanVoice(cue);
+}
+
 function useCharacterSpecial(): void {
   const special = SPECIALS[selectedCharacter];
   if (state.credits < special.cost) {
@@ -455,6 +461,7 @@ function useCharacterSpecial(): void {
   if (state.finished || state.liftTime > 0 || state.recovering > 0) return;
   state.credits -= special.cost;
   input.pulse(.82, .92, 360);
+  playSnowmanVoice("special");
 
   if (selectedCharacter === "snowman") {
     snowballSpecial = { active: true, s: state.s + 2.5, x: state.x, startS: state.s, lap: state.lap, hit: new Set() };
@@ -513,12 +520,14 @@ function handleEvent(event: GameEvent): void {
   }
   if (event.type === "ITEM_USED") {
     input.pulse(event.item === "turbo" ? .7 : .35, .65, event.item === "turbo" ? 220 : 140);
+    if (event.item === "turbo") playSnowmanVoice("nitro");
     if (event.item === "wind") {
       const target = findWindTarget()?.opponent;
       if (target && applyWindHit(target)) {
         view.windShot(state, target);
         input.pulse(.72, .88, 250);
         showToast(`RAJADA NO ${target.name}!`, "wind");
+        playSnowmanVoice("wind-hit");
       }
     } else if (event.item === "blizzard") {
       [rival, guy, giru].forEach(applyBlizzardSlow);
@@ -532,6 +541,7 @@ function handleEvent(event: GameEvent): void {
   if (event.type === "CRASH") {
     input.pulse(1, .7, 260);
     showToast("TUMBOU!", "crash");
+    playSnowmanVoice("hit");
   }
   if (event.type === "SECTION") showToast(event.name.toUpperCase(), "clean");
   if (event.type === "LIFT") {
@@ -697,6 +707,9 @@ function frame(now: number): void {
         resolveRivalContact(rival, guy);
         resolveRivalContact(rival, giru);
         resolveRivalContact(guy, giru);
+        const racePosition = currentRacePosition();
+        if (lastRacePosition > 1 && racePosition === 1) playSnowmanVoice("overtake-first");
+        lastRacePosition = racePosition;
         updateSnowballSpecial(fixedStep);
         if (Math.abs(state.s - progressBeforeStep) > 5) previousRider = { ...state };
         if (Math.abs(rival.s - previousRival.s) > 5) previousRival = { ...rival };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { courseMusicPath, menuMusicPath } from "../src/input/AudioManager.ts";
+import { courseMusicPath, menuMusicPath, snowmanVoicePath } from "../src/input/AudioManager.ts";
 
 describe("trilhas da campanha", () => {
   it("mantém um tema próprio nos menus", () => {
@@ -18,5 +18,16 @@ describe("trilhas da campanha", () => {
   it("protege a seleção contra números fora da campanha", () => {
     expect(courseMusicPath(0, "/neve-brava/")).toBe("/neve-brava/audio/track-1.mp3");
     expect(courseMusicPath(9, "/neve-brava/")).toBe("/neve-brava/audio/track-4.mp3");
+  });
+
+  it("vincula as falas do Nevinho aos cinco eventos da corrida", () => {
+    expect(["nitro", "overtake-first", "hit", "special", "wind-hit"].map(cue =>
+      snowmanVoicePath(cue as Parameters<typeof snowmanVoicePath>[0], "/neve-brava/"))).toEqual([
+      "/neve-brava/audio/voices/snowman/nitro.mp3",
+      "/neve-brava/audio/voices/snowman/overtake-first.mp3",
+      "/neve-brava/audio/voices/snowman/hit.mp3",
+      "/neve-brava/audio/voices/snowman/special.mp3",
+      "/neve-brava/audio/voices/snowman/wind-hit.mp3",
+    ]);
   });
 });
