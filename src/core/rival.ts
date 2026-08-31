@@ -52,6 +52,7 @@ export type RivalState = {
   turboTime: number;
   slowTime: number;
   timeWarpTime: number;
+  freezeTime: number;
   lap: number;
   liftTime: number;
   finished: boolean;
@@ -119,6 +120,7 @@ export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
     turboTime: 0,
     slowTime: 0,
     timeWarpTime: 0,
+    freezeTime: 0,
     lap: 1,
     liftTime: 0,
     finished: false,
@@ -234,8 +236,23 @@ export function applyBlizzardSlow(state: RivalState): boolean {
 
 export function applyTimeWarp(state: RivalState): boolean {
   if (state.finished) return false;
-  state.timeWarpTime = Math.max(state.timeWarpTime, 3);
+  state.timeWarpTime = Math.max(state.timeWarpTime, 5);
   state.speed = Math.max(7, state.speed * .35);
+  return true;
+}
+
+export function applyFreeze(state: RivalState): boolean {
+  if (state.finished || state.liftTime > 0) return false;
+  state.freezeTime = Math.max(state.freezeTime, 2);
+  state.speed = 0;
+  state.lateralSpeed = 0;
+  state.grounded = true;
+  state.verticalSpeed = 0;
+  state.y = courseHeight(state.s) + .52;
+  state.stun = 0;
+  state.tumble = 0;
+  state.windHit = 0;
+  state.contactCooldown = Math.max(state.contactCooldown, 2.1);
   return true;
 }
 
@@ -256,6 +273,7 @@ function beginNextLap(state: RivalState): void {
   state.airTime = 0;
   state.stun = 0;
   state.tumble = 0;
+  state.freezeTime = 0;
   state.lastRamp = "";
   state.contactCooldown = 1;
   state.windHit = 0;
@@ -273,6 +291,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
   state.turboTime = Math.max(0, state.turboTime - step);
   state.slowTime = Math.max(0, state.slowTime - step);
   state.timeWarpTime = Math.max(0, state.timeWarpTime - step);
+  state.freezeTime = Math.max(0, state.freezeTime - step);
 
   if (state.liftTime > 0) {
     state.liftTime = Math.max(0, state.liftTime - step);
@@ -280,6 +299,15 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
       beginNextLap(state);
       events.push({ type: "RIVAL_LAP", lap: state.lap });
     }
+    return events;
+  }
+
+  if (state.freezeTime > 0) {
+    state.speed = 0;
+    state.lateralSpeed = 0;
+    state.grounded = true;
+    state.verticalSpeed = 0;
+    state.y = courseHeight(state.s) + .52;
     return events;
   }
 
@@ -397,7 +425,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
 }
 
 export function resolveRiderContact(rival: RivalState, rider: RiderState): boolean {
-  if (rival.lap !== rider.lap || rival.liftTime > 0 || rider.liftTime > 0 || rival.contactCooldown > 0 || rival.stun > 0 || rider.recovering > 0 || !rival.grounded || !rider.grounded) return false;
+  if (rival.lap !== rider.lap || rival.liftTime > 0 || rider.liftTime > 0 || rival.contactCooldown > 0 || rival.stun > 0 || rival.freezeTime > 0 || rider.recovering > 0 || !rival.grounded || !rider.grounded) return false;
   if (Math.abs(rival.s - rider.s) > 1.75 || Math.abs(rival.x - rider.x) > 1.5) return false;
   const side = Math.sign(rival.x - rider.x) || (Math.sin(rival.s) > 0 ? 1 : -1);
   rival.x += side * .32;
@@ -412,7 +440,7 @@ export function resolveRiderContact(rival: RivalState, rider: RiderState): boole
 }
 
 export function resolveRivalContact(first: RivalState, second: RivalState): boolean {
-  if (first.lap !== second.lap || first.liftTime > 0 || second.liftTime > 0 || first.contactCooldown > 0 || second.contactCooldown > 0 || first.stun > 0 || second.stun > 0 || !first.grounded || !second.grounded) return false;
+  if (first.lap !== second.lap || first.liftTime > 0 || second.liftTime > 0 || first.contactCooldown > 0 || second.contactCooldown > 0 || first.stun > 0 || second.stun > 0 || first.freezeTime > 0 || second.freezeTime > 0 || !first.grounded || !second.grounded) return false;
   if (Math.abs(first.s - second.s) > 1.7 || Math.abs(first.x - second.x) > 1.45) return false;
   const side = Math.sign(first.x - second.x) || (Math.sin(first.s + first.linePhase) > 0 ? 1 : -1);
   first.x += side * .25;

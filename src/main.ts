@@ -6,7 +6,7 @@ import {
 import { createRider, interpolateRider, updateRider, type GameEvent, type RiderState } from "./core/simulation.ts";
 import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
 import {
-  applyBlizzardSlow, applyTimeWarp, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
+  applyBlizzardSlow, applyFreeze, applyTimeWarp, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
   RIVAL_PROFILES, updateRival, YETI_PROFILE, type RivalEvent, type RivalState,
 } from "./core/rival.ts";
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
@@ -16,7 +16,7 @@ import { GameView, type Quality } from "./view/GameView.ts";
 type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 type SpecialDefinition = { name: string; cost: number };
-type SnowballSpecial = { active: boolean; s: number; x: number; startS: number; lap: number; hit: Set<CharacterId> };
+type SnowballSpecial = { active: boolean; s: number; x: number; lap: number; hit: Set<CharacterId> };
 
 const SPECIALS: Record<CharacterId, SpecialDefinition> = {
   snowman: { name: "BOLA GIGANTE", cost: 1_500 },
@@ -101,7 +101,7 @@ let countdown = 3.35;
 let toastTimer = 0;
 let slowFxTimer = 0;
 let specialFxTimer = 0;
-let snowballSpecial: SnowballSpecial = { active: false, s: 0, x: 0, startS: 0, lap: 1, hit: new Set() };
+let snowballSpecial: SnowballSpecial = { active: false, s: 0, x: 0, lap: 1, hit: new Set() };
 let lastRacePosition = 1;
 let hudTimer = 0;
 let disconnectedPause = false;
@@ -121,6 +121,10 @@ const itemHud = $("#item-hud");
 const specialHud = $("#special-hud");
 const specialArt = $("#special-art") as HTMLImageElement;
 const specialProgress = $("#special-progress");
+const specialCutIn = $("#special-cut-in");
+const specialCutInImage = $("#special-cut-in-image") as HTMLImageElement;
+const specialCutInRider = $("#special-cut-in-rider");
+const specialCutInName = $("#special-cut-in-name");
 const boostFx = $("#boost-fx");
 const slowFx = $("#slow-fx");
 const specialFx = $("#special-fx");
@@ -362,7 +366,7 @@ function startRun(): void {
   previousGiru = { ...giru };
   view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   updateMapPortraits();
-  snowballSpecial = { active: false, s: 0, x: 0, startS: 0, lap: 1, hit: new Set() };
+  snowballSpecial = { active: false, s: 0, x: 0, lap: 1, hit: new Set() };
   lastRacePosition = 1;
   specialFxTimer = 0;
   specialFx.className = "special-fx";
@@ -463,6 +467,24 @@ function playGuyVoice(cue: GuyVoiceCue): void {
   if (selectedCharacter === "guy") audio.playGuyVoice(cue);
 }
 
+function showSpecialCutIn(characterId: CharacterId): void {
+  const character = characterById(characterId);
+  const portrait = characterId === "giru" ? "giru-v2" : characterId;
+  specialCutIn.dataset.character = characterId;
+  specialCutInImage.src = `${import.meta.env.BASE_URL}images/characters/${portrait}.png`;
+  specialCutInRider.textContent = character.name.toUpperCase();
+  specialCutInName.textContent = SPECIALS[characterId].name;
+  specialCutIn.setAttribute("aria-hidden", "false");
+  specialCutIn.classList.remove("active");
+  void specialCutIn.offsetWidth;
+  specialCutIn.classList.add("active");
+}
+
+specialCutIn.addEventListener("animationend", () => {
+  specialCutIn.classList.remove("active");
+  specialCutIn.setAttribute("aria-hidden", "true");
+});
+
 function useCharacterSpecial(): void {
   const special = SPECIALS[selectedCharacter];
   if (state.credits < special.cost) {
@@ -473,17 +495,17 @@ function useCharacterSpecial(): void {
   if (state.finished || state.liftTime > 0 || state.recovering > 0) return;
   state.credits -= special.cost;
   input.pulse(.82, .92, 360);
+  showSpecialCutIn(selectedCharacter);
   playSnowmanVoice("special");
   playGiruVoice("special");
   playYetiVoice("special");
   playGuyVoice("special");
 
   if (selectedCharacter === "snowman") {
-    snowballSpecial = { active: true, s: state.s + 2.5, x: state.x, startS: state.s, lap: state.lap, hit: new Set() };
+    snowballSpecial = { active: true, s: state.s, x: 0, lap: state.lap, hit: new Set() };
     activateSpecialFx("snowman", .75);
   } else if (selectedCharacter === "yeti") {
-    opponents().filter(opponent => !opponent.finished && opponent.lap === state.lap
-      && Math.hypot(opponent.s - state.s, (opponent.x - state.x) * 1.35) <= 27).forEach(applyWindHit);
+    opponents().filter(opponent => !opponent.finished).forEach(applyWindHit);
     view.specialPulse(state, "yeti");
     activateSpecialFx("yeti", 1.35);
   } else if (selectedCharacter === "guy") {
@@ -501,13 +523,13 @@ function useCharacterSpecial(): void {
 function updateSnowballSpecial(step: number): void {
   if (!snowballSpecial.active) return;
   const previousS = snowballSpecial.s;
-  snowballSpecial.s += 68 * step;
+  snowballSpecial.s = Math.min(COURSE_LENGTH, snowballSpecial.s + 220 * step);
   for (const opponent of opponents()) {
     if (snowballSpecial.hit.has(opponent.id) || opponent.finished || opponent.lap !== snowballSpecial.lap) continue;
-    if (opponent.s < previousS - 2 || opponent.s > snowballSpecial.s + 2 || Math.abs(opponent.x - snowballSpecial.x) > 5.2) continue;
-    if (applyWindHit(opponent)) snowballSpecial.hit.add(opponent.id);
+    if (opponent.s < previousS - 6 || opponent.s > snowballSpecial.s + 3) continue;
+    if (applyFreeze(opponent)) snowballSpecial.hit.add(opponent.id);
   }
-  if (snowballSpecial.s - snowballSpecial.startS >= 145 || snowballSpecial.s >= COURSE_LENGTH) snowballSpecial.active = false;
+  if (snowballSpecial.s >= COURSE_LENGTH) snowballSpecial.active = false;
 }
 
 const WIND_RANGE = 74;

@@ -286,6 +286,26 @@ function createSlowAura(): THREE.Group {
   return aura;
 }
 
+function createFreezeShell(): THREE.Group {
+  const shell = new THREE.Group();
+  const geometry = new THREE.IcosahedronGeometry(1.42, 1);
+  const ice = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+    color: 0x86dcf5, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide,
+  }));
+  ice.position.y = 1.12;
+  ice.scale.set(.92, 1.18, .76);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry, 18),
+    new THREE.LineBasicMaterial({ color: 0xe5fbff, transparent: true, opacity: .72, depthWrite: false }),
+  );
+  edges.position.copy(ice.position);
+  edges.scale.copy(ice.scale);
+  shell.add(ice, edges);
+  shell.visible = false;
+  shell.renderOrder = 15;
+  return shell;
+}
+
 function createItemBox(item: ItemKind): THREE.Group {
   const group = new THREE.Group();
   const body = outlined(new THREE.BoxGeometry(1.75, 1.65, 1.75), itemColor(item));
@@ -646,7 +666,7 @@ export class GameView {
   private windTargetMarker = createWindTargetMarker();
   private specialSnowball = new THREE.Mesh(
     new THREE.IcosahedronGeometry(1.35, 2),
-    toon(PALETTE.snow, { emissive: 0x8bc5df, emissiveIntensity: .08 }),
+    toon(PALETTE.snow, { emissive: 0x8bc5df, emissiveIntensity: .1, transparent: true, opacity: .76, depthWrite: false }),
   );
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -682,9 +702,15 @@ export class GameView {
     this.rival.userData.slowAura = createSlowAura();
     this.guy.userData.slowAura = createSlowAura();
     this.giru.userData.slowAura = createSlowAura();
+    this.rival.userData.freezeShell = createFreezeShell();
+    this.guy.userData.freezeShell = createFreezeShell();
+    this.giru.userData.freezeShell = createFreezeShell();
     this.rival.add(this.rival.userData.slowAura as THREE.Group);
     this.guy.add(this.guy.userData.slowAura as THREE.Group);
     this.giru.add(this.giru.userData.slowAura as THREE.Group);
+    this.rival.add(this.rival.userData.freezeShell as THREE.Group);
+    this.guy.add(this.guy.userData.freezeShell as THREE.Group);
+    this.giru.add(this.giru.userData.freezeShell as THREE.Group);
     this.rivalShadow.rotation.x = -Math.PI / 2;
     this.rivalShadow.scale.set(1.9, .7, 1);
     this.guyShadow.rotation.x = -Math.PI / 2;
@@ -694,7 +720,7 @@ export class GameView {
     this.selectionRing.rotation.x = -Math.PI / 2;
     this.selectionRing.visible = false;
     this.specialSnowball.visible = false;
-    this.specialSnowball.castShadow = true;
+    this.specialSnowball.castShadow = false;
     this.scene.add(this.snowTrails, this.contactShadow, this.rider, this.rivalShadow, this.rival, this.guyShadow, this.guy, this.giruShadow, this.giru, this.selectionRing, this.windTargetMarker, this.specialSnowball, this.debugLines);
     this.loadRiderModel();
     this.loadRivalModel();
@@ -1261,9 +1287,9 @@ export class GameView {
     this.updateSnowfall(state, dt);
     this.updatePickupVisuals(state);
     this.updateSnowTrail(this.riderTrail, state.s, state.x, !riderInLift && state.grounded && state.recovering <= 0, state.speed, state.carve);
-    this.updateSnowTrail(this.rivalTrail, rivalState.s, rivalState.x, rivalState.liftTime <= 0 && rivalState.grounded && rivalState.stun <= 0, rivalState.speed, rivalState.carve);
-    this.updateSnowTrail(this.guyTrail, guyState.s, guyState.x, guyState.liftTime <= 0 && guyState.grounded && guyState.stun <= 0, guyState.speed, guyState.carve);
-    this.updateSnowTrail(this.giruTrail, giruState.s, giruState.x, giruState.liftTime <= 0 && giruState.grounded && giruState.stun <= 0, giruState.speed, giruState.carve);
+    this.updateSnowTrail(this.rivalTrail, rivalState.s, rivalState.x, rivalState.liftTime <= 0 && rivalState.grounded && rivalState.stun <= 0 && rivalState.freezeTime <= 0, rivalState.speed, rivalState.carve);
+    this.updateSnowTrail(this.guyTrail, guyState.s, guyState.x, guyState.liftTime <= 0 && guyState.grounded && guyState.stun <= 0 && guyState.freezeTime <= 0, guyState.speed, guyState.carve);
+    this.updateSnowTrail(this.giruTrail, giruState.s, giruState.x, giruState.liftTime <= 0 && giruState.grounded && giruState.stun <= 0 && giruState.freezeTime <= 0, giruState.speed, giruState.carve);
     this.riderShield.visible = state.shieldTime > 0;
     if (state.shieldTime > 0) {
       const pulse = 1 + Math.sin(this.elapsedVisual * 8) * .035;
@@ -1354,11 +1380,14 @@ export class GameView {
     if (!snowball.active) return;
     const world = courseWorldPoint(snowball.s, snowball.x);
     const frame = courseFrame(snowball.s);
-    this.specialSnowball.position.set(world.x, courseTerrainHeight(snowball.s, snowball.x) + 1.22, world.z);
-    this.specialSnowball.rotation.x += dt * 8;
-    this.specialSnowball.rotation.z -= dt * 5.5;
+    this.specialSnowball.position.set(world.x, courseTerrainHeight(snowball.s, snowball.x) + 1.02, world.z);
+    this.specialSnowball.userData.roll = (this.specialSnowball.userData.roll as number | undefined ?? 0) + dt * 8;
+    this.specialSnowball.rotation.set(this.specialSnowball.userData.roll as number, frame.heading, 0);
+    this.specialSnowball.scale.set(COURSE_HALF_WIDTH / 1.35, .74, 1.85);
     if (Math.random() < dt * (this.quality === "performance" ? 22 : 48)) {
-      const origin = this.specialSnowball.position.clone().add(new THREE.Vector3(-frame.tx * 1.2, -.7, -frame.tz * 1.2));
+      const lateral = (Math.random() * 2 - 1) * COURSE_HALF_WIDTH * .92;
+      const trailWorld = courseWorldPoint(snowball.s, lateral);
+      const origin = new THREE.Vector3(trailWorld.x - frame.tx * 1.2, courseTerrainHeight(snowball.s, lateral) + .35, trailWorld.z - frame.tz * 1.2);
       const velocity = new THREE.Vector3(-frame.tx * (5 + Math.random() * 6), 1 + Math.random() * 2.5, -frame.tz * (5 + Math.random() * 6));
       this.spawnParticle(origin, Math.random() > .25 ? PALETTE.snow : PALETTE.snowBlue, .16 + Math.random() * .16, .42, velocity);
     }
@@ -1509,7 +1538,7 @@ export class GameView {
     const frame = courseFrame(state.s);
     const groundY = courseTerrainHeight(state.s, state.x);
     const surfaceOffset = Math.max(0, state.y - courseHeight(state.s) - .52);
-    const moving = state.elapsed > .05 && state.s > .25;
+    const moving = state.elapsed > .05 && state.s > .25 && state.freezeTime <= 0;
     // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
     // a sola dentro da camada superficial da neve sem afundar o personagem.
     const snowContactInset = state.id === "yeti" ? .14 : state.id === "guy" ? .085 : state.id === "giru" ? .08 : .035;
@@ -1539,6 +1568,13 @@ export class GameView {
         else child.position.y = child.userData.baseY + Math.sin(this.elapsedVisual * 6 + child.userData.phase) * .12;
       });
     }
+    const freezeShell = group.userData.freezeShell as THREE.Group;
+    freezeShell.visible = group.visible && state.freezeTime > 0;
+    if (freezeShell.visible) {
+      freezeShell.rotation.y += dt * .7;
+      const frozenPulse = 1 + Math.sin(this.elapsedVisual * 5 + state.linePhase) * .025;
+      freezeShell.scale.setScalar(frozenPulse);
+    }
     const airGap = Math.max(0, surfaceOffset);
     shadow.position.set(world.x, groundY + .04, world.z);
     const material = shadow.material as THREE.MeshBasicMaterial;
@@ -1560,6 +1596,11 @@ export class GameView {
       const origin = new THREE.Vector3(world.x + (Math.random() - .5) * 1.7, groundY + .5 + Math.random() * 1.7, world.z + (Math.random() - .5) * 1.7);
       const velocity = new THREE.Vector3((Math.random() - .5) * 1.2, .4 + Math.random(), (Math.random() - .5) * 1.2);
       this.spawnParticle(origin, state.timeWarpTime > 0 ? (Math.random() > .35 ? 0xb76aef : 0xead7ff) : Math.random() > .35 ? 0x9fe7ff : PALETTE.snow, .11 + Math.random() * .07, .48, velocity);
+    }
+    if (group.visible && state.freezeTime > 0 && Math.random() < dt * (this.quality === "performance" ? 12 : 26)) {
+      const origin = new THREE.Vector3(world.x + (Math.random() - .5) * 1.4, groundY + .4 + Math.random() * 2, world.z + (Math.random() - .5) * 1.4);
+      const velocity = new THREE.Vector3((Math.random() - .5) * .45, .15 + Math.random() * .45, (Math.random() - .5) * .45);
+      this.spawnParticle(origin, Math.random() > .3 ? 0xbceeff : 0xffffff, .1 + Math.random() * .08, .65, velocity);
     }
   }
 
