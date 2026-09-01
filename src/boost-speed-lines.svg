@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="ray" cx="800" cy="500" r="820" gradientUnits="userSpaceOnUse">
+      <stop offset=".22" stop-color="#fff8dc" stop-opacity="0"/>
+      <stop offset=".39" stop-color="#fff8dc" stop-opacity=".5"/>
+      <stop offset=".76" stop-color="#fff1bd" stop-opacity=".92"/>
+      <stop offset="1" stop-color="#ffbd68" stop-opacity=".22"/>
+    </radialGradient>
+  </defs>
+  <g fill="none" stroke="url(#ray)" stroke-linecap="round">
+    <path stroke-width="7" d="M624 398 120 -20"/>
+    <path stroke-width="4" d="M671 374 355 -20"/>
+    <path stroke-width="8" d="M721 354 585 -30"/>
+    <path stroke-width="4" d="M768 347 730 -40"/>
+    <path stroke-width="6" d="M829 348 880 -35"/>
+    <path stroke-width="9" d="M883 359 1090 -30"/>
+    <path stroke-width="4" d="M932 382 1330 -25"/>
+    <path stroke-width="7" d="M972 412 1570 90"/>
+    <path stroke-width="4" d="M1009 446 1630 250"/>
+    <path stroke-width="8" d="M1034 482 1640 410"/>
+    <path stroke-width="5" d="M1037 527 1640 570"/>
+    <path stroke-width="9" d="M1020 570 1630 745"/>
+    <path stroke-width="4" d="M989 607 1510 930"/>
+    <path stroke-width="7" d="M951 634 1285 940"/>
+    <path stroke-width="5" d="M904 654 1070 950"/>
+    <path stroke-width="8" d="M850 663 890 950"/>
+    <path stroke-width="4" d="M790 666 755 950"/>
+    <path stroke-width="7" d="M733 657 560 945"/>
+    <path stroke-width="9" d="M680 639 330 940"/>
+    <path stroke-width="4" d="M637 613 80 930"/>
+    <path stroke-width="8" d="M604 578 -30 775"/>
+    <path stroke-width="5" d="M579 538 -40 600"/>
+    <path stroke-width="9" d="M574 494 -40 440"/>
+    <path stroke-width="4" d="M589 450 -30 275"/>
+    <path stroke-width="5" d="M651 414 250 165"/>
+    <path stroke-width="3" d="M706 391 545 135"/>
+    <path stroke-width="5" d="M892 393 1115 135"/>
+    <path stroke-width="3" d="M954 431 1400 240"/>
+    <path stroke-width="5" d="M970 582 1370 800"/>
+    <path stroke-width="3" d="M652 590 230 810"/>
+    <path stroke-width="5" d="M612 466 130 330"/>
+    <path stroke-width="3" d="M1010 514 1480 515"/>
+  </g>
+</svg>
