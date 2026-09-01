@@ -214,13 +214,63 @@
           <div><b>Deadzone dos analógicos</b><small id="deadzone-value">16%</small></div>
           <input id="deadzone" class="focusable" type="range" min="8" max="30" value="16" />
         </label>
-        <div class="control-map">
-          <span><i>L</i> Carving</span><span><i>R2</i> Tuck</span><span><i>L2</i> Freio</span>
-          <span><i>✕</i> Ollie</span><span><i>□</i> Grab</span><span><i>L1/R1</i> Giro</span>
-          <span><i>△</i> Flip</span><span><i>○</i> Preparar pouso</span><span><i>R3</i> Usar item</span><span><i>L3</i> Especial</span>
-          <span><i>☰</i> Pausa</span>
+        <div class="setting-row controls-setting">
+          <div><b>Comandos</b><small>DualSense e teclado de desenvolvimento.</small></div>
+          <button id="controls-button" class="secondary focusable"><span>?</span> VER COMANDOS</button>
         </div>
         <button id="settings-back-button" class="primary focusable"><span>○</span> VOLTAR</button>
+      </section>
+
+      <section id="controls-screen" class="screen modal controls-screen hidden">
+        <header class="controls-head">
+          <div><p class="eyebrow">GUIA DE PILOTAGEM</p><h2>Comandos</h2><p>Escolha seu equipamento e confira cada movimento.</p></div>
+          <button id="controls-back-button" class="secondary focusable">← CONFIGURAÇÕES</button>
+        </header>
+        <div class="controls-tabs" role="tablist" aria-label="Tipo de controle">
+          <button id="controls-dualsense-tab" class="focusable active" data-controls-tab="dualsense" role="tab" aria-selected="true">DUALSENSE</button>
+          <button id="controls-keyboard-tab" class="focusable" data-controls-tab="keyboard" role="tab" aria-selected="false">TECLADO</button>
+        </div>
+
+        <div id="controls-dualsense-panel" class="controls-panel" data-controls-panel="dualsense" role="tabpanel" aria-labelledby="controls-dualsense-tab">
+          <div class="controller-guide">
+            <svg class="dualsense-drawing" viewBox="0 0 640 390" role="img" aria-label="Diagrama do controle DualSense">
+              <path class="pad-shell" d="M190 79c35-19 67-26 130-26s95 7 130 26c46 1 77 25 95 68 19 46 35 113 44 158 7 34-7 60-34 67-28 7-50-11-68-39l-49-78c-24 18-64 28-118 28s-94-10-118-28l-49 78c-18 28-40 46-68 39-27-7-41-33-34-67 9-45 25-112 44-158 18-43 49-67 95-68Z" />
+              <path class="pad-detail" d="M238 76c-3 44 7 75 27 92 14 12 33 18 55 18s41-6 55-18c20-17 30-48 27-92" />
+              <rect class="touch-pad" x="264" y="82" width="112" height="72" rx="17" />
+              <circle class="stick" cx="230" cy="236" r="39" /><circle class="stick-inner" cx="230" cy="236" r="27" />
+              <circle class="stick" cx="410" cy="236" r="39" /><circle class="stick-inner" cx="410" cy="236" r="27" />
+              <g class="dpad"><rect x="143" y="154" width="78" height="28" rx="7" /><rect x="168" y="129" width="28" height="78" rx="7" /></g>
+              <g class="face-buttons"><circle cx="473" cy="142" r="17" /><circle cx="508" cy="177" r="17" /><circle cx="473" cy="212" r="17" /><circle cx="438" cy="177" r="17" /><text x="473" y="148">△</text><text x="508" y="183">○</text><text x="473" y="218">✕</text><text x="438" y="183">□</text></g>
+              <rect class="shoulder" x="137" y="65" width="105" height="24" rx="10" /><rect class="shoulder" x="398" y="65" width="105" height="24" rx="10" />
+              <circle class="option-dot" cx="402" cy="146" r="7" /><path class="speaker" d="M296 211h48M300 220h40M306 229h28" />
+            </svg>
+            <div class="control-callout callout-l2"><kbd>L2</kbd><span><b>FREIO</b><small>Controle de velocidade</small></span></div>
+            <div class="control-callout callout-r2"><kbd>R2</kbd><span><b>TUCK</b><small>Acelerar na descida</small></span></div>
+            <div class="control-callout callout-l1"><kbd>L1</kbd><span><b>GIRO ESQUERDO</b></span></div>
+            <div class="control-callout callout-r1"><kbd>R1</kbd><span><b>GIRO DIREITO</b></span></div>
+            <div class="control-callout callout-steer"><kbd>L</kbd><span><b>CARVING</b><small>Direção</small></span></div>
+            <div class="control-callout callout-special"><kbd>L3</kbd><span><b>ESPECIAL</b></span></div>
+            <div class="control-callout callout-item"><kbd>R3</kbd><span><b>USAR ITEM</b></span></div>
+            <div class="control-callout callout-face"><span class="face-list"><i>△</i> Flip<br><i>□</i> Grab<br><i>○</i> Pouso<br><i>✕</i> Ollie</span></div>
+            <div class="control-callout callout-pause"><kbd>☰</kbd><span><b>PAUSA</b></span></div>
+          </div>
+        </div>
+
+        <div id="controls-keyboard-panel" class="controls-panel hidden" data-controls-panel="keyboard" role="tabpanel" aria-labelledby="controls-keyboard-tab">
+          <div class="keyboard-guide">
+            <article class="keyboard-wide"><div class="key-combo"><kbd>A</kbd><kbd>D</kbd><em>ou</em><kbd>←</kbd><kbd>→</kbd></div><b>CARVING</b><small>Direção na pista</small></article>
+            <article><div class="key-combo"><kbd>SHIFT</kbd></div><b>TUCK</b><small>Acelerar na descida</small></article>
+            <article><div class="key-combo"><kbd>CTRL</kbd><em>ou</em><kbd>S</kbd></div><b>FREIO</b><small>Reduzir velocidade</small></article>
+            <article class="keyboard-wide"><div class="key-combo"><kbd class="space-key">ESPAÇO</kbd></div><b>OLLIE</b><small>Segure para carregar e solte para pular</small></article>
+            <article><div class="key-combo"><kbd>Q</kbd><kbd>E</kbd></div><b>GIRO</b><small>Esquerda e direita</small></article>
+            <article><div class="key-combo"><kbd>F</kbd></div><b>GRAB</b><small>Segure durante o salto</small></article>
+            <article><div class="key-combo"><kbd>C</kbd></div><b>FLIP</b><small>Manobra aérea</small></article>
+            <article><div class="key-combo"><kbd>X</kbd></div><b>PREPARAR POUSO</b><small>Estabilizar a prancha</small></article>
+            <article><div class="key-combo"><kbd>R</kbd></div><b>USAR ITEM</b><small>Ativar item equipado</small></article>
+            <article><div class="key-combo"><kbd>T</kbd></div><b>ESPECIAL</b><small>Ativar poder do piloto</small></article>
+            <article><div class="key-combo"><kbd>ESC</kbd></div><b>PAUSA</b><small>Abrir o menu</small></article>
+          </div>
+        </div>
       </section>
     </main>
 

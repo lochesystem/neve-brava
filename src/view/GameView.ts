@@ -679,7 +679,7 @@ export class GameView {
     toon(PALETTE.snow, { emissive: 0x8bc5df, emissiveIntensity: .1, transparent: true, opacity: .76, depthWrite: false }),
   );
 
-  constructor(private canvas: HTMLCanvasElement) {
+  constructor(private canvas: HTMLCanvasElement, private mobilePerformance = false) {
     this.riderTrail = this.createSnowTrail();
     this.rivalTrail = this.createSnowTrail();
     this.guyTrail = this.createSnowTrail();
@@ -1345,7 +1345,8 @@ export class GameView {
       backwards.z += frame.nz * side * (1.4 + Math.abs(state.carve) * 3);
       this.spawnParticle(origin, PALETTE.snow, 0.13 + Math.random() * 0.1, 0.5, backwards);
     }
-    if (state.turboTime > 0 && Math.random() < dt * (this.quality === "performance" ? 45 : 95)) {
+    const playerTurboParticleRate = this.mobilePerformance ? (this.quality === "performance" ? 12 : 20) : this.quality === "performance" ? 45 : 95;
+    if (state.turboTime > 0 && Math.random() < dt * playerTurboParticleRate) {
       const origin = new THREE.Vector3(world.x - frame.tx * 1.1, boardY + .28, world.z - frame.tz * 1.1);
       const velocity = new THREE.Vector3(-frame.tx * (10 + Math.random() * 7), 1 + Math.random() * 1.8, -frame.tz * (10 + Math.random() * 7));
       this.spawnParticle(origin, Math.random() > .45 ? PALETTE.yellow : PALETTE.coral, .17 + Math.random() * .12, .36, velocity);
@@ -1625,7 +1626,8 @@ export class GameView {
       const spray = new THREE.Vector3(-frame.tx * 7 + frame.nx * state.carve * 3, 1.5 + Math.random() * 2, -frame.tz * 7 + frame.nz * state.carve * 3);
       this.spawnParticle(origin, PALETTE.snow, .13 + Math.random() * .08, .42, spray);
     }
-    if (group.visible && state.turboTime > 0 && Math.random() < dt * (this.quality === "performance" ? 32 : 68)) {
+    const rivalTurboParticleRate = this.mobilePerformance ? (this.quality === "performance" ? 7 : 11) : this.quality === "performance" ? 32 : 68;
+    if (group.visible && state.turboTime > 0 && Math.random() < dt * rivalTurboParticleRate) {
       const origin = new THREE.Vector3(world.x - frame.tx * 1.05, groundY + .28, world.z - frame.tz * 1.05);
       const velocity = new THREE.Vector3(-frame.tx * (8 + Math.random() * 6), 1 + Math.random() * 1.4, -frame.tz * (8 + Math.random() * 6));
       this.spawnParticle(origin, Math.random() > .45 ? PALETTE.yellow : PALETTE.coral, .14 + Math.random() * .1, .32, velocity);
@@ -1645,7 +1647,8 @@ export class GameView {
   event(event: GameEvent, state: RiderState): void {
     const world = courseWorldPoint(state.s, state.x);
     const position = new THREE.Vector3(world.x, state.y, world.z);
-    const count = event.type === "CRASH" ? 20 : event.type === "LAND" ? 14 : event.type === "ITEM_USED" || event.type === "SHIELD_BREAK" ? 18 : event.type === "TAKEOFF" ? 8 : 5;
+    const turboBurst = this.mobilePerformance ? 6 : 18;
+    const count = event.type === "CRASH" ? 20 : event.type === "LAND" ? 14 : event.type === "ITEM_USED" && event.item === "turbo" ? turboBurst : event.type === "ITEM_USED" || event.type === "SHIELD_BREAK" ? 18 : event.type === "TAKEOFF" ? 8 : 5;
     const color = event.type === "CRASH" ? PALETTE.coral
       : event.type === "COIN" || (event.type === "ITEM_USED" && event.item === "turbo") ? PALETTE.yellow
       : event.type === "ITEM_USED" && event.item === "blizzard" ? 0x9fe7ff
@@ -2265,7 +2268,8 @@ export class GameView {
   }
 
   private spawnParticle(origin: THREE.Vector3, color: number, size: number, life: number, initialVelocity?: THREE.Vector3): void {
-    if (this.particles.length > (this.quality === "performance" ? 70 : 150)) return;
+    const particleLimit = this.mobilePerformance ? (this.quality === "performance" ? 28 : 42) : this.quality === "performance" ? 70 : 150;
+    if (this.particles.length > particleLimit) return;
     const mesh = new THREE.Mesh(new THREE.TetrahedronGeometry(size), new THREE.MeshBasicMaterial({ color, transparent: true }));
     mesh.position.copy(origin).add(new THREE.Vector3((Math.random() - 0.5) * 1.2, Math.random() * 0.5, (Math.random() - 0.5) * 1.2));
     this.scene.add(mesh);

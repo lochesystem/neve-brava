@@ -17,7 +17,7 @@ import { InputManager, type MenuAction } from "./input/InputManager.ts";
 import { AudioManager, type GiruVoiceCue, type GuyVoiceCue, type SnowmanVoiceCue, type YetiVoiceCue } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
 
-type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings";
+type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings" | "controls";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 type SnowballSpecial = { active: boolean; owner: CharacterId; s: number; x: number; lap: number; hit: Set<CharacterId> };
 
@@ -33,9 +33,10 @@ const characterScreen = document.querySelector<HTMLElement>("#character-screen")
 const pauseScreen = document.querySelector<HTMLElement>("#pause-screen")!;
 const resultsScreen = document.querySelector<HTMLElement>("#results-screen")!;
 const settingsScreen = document.querySelector<HTMLElement>("#settings-screen")!;
+const controlsScreen = document.querySelector<HTMLElement>("#controls-screen")!;
 const input = new InputManager();
 const audio = new AudioManager();
-const view = new GameView(canvas);
+const view = new GameView(canvas, input.touchEnabled);
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 
 if (input.touchEnabled) document.body.classList.add("mobile-mode");
@@ -293,19 +294,20 @@ function showScreen(next: Screen): void {
   screen = next;
   document.body.dataset.screen = next;
   menu.dataset.screen = next;
-  canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "settings", "results"].includes(next));
+  canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "settings", "controls", "results"].includes(next));
   titleScreen.classList.toggle("hidden", next !== "title");
   campaignScreen.classList.toggle("hidden", next !== "campaign");
   characterScreen.classList.toggle("hidden", next !== "character");
   pauseScreen.classList.toggle("hidden", next !== "paused");
   resultsScreen.classList.toggle("hidden", next !== "results");
   settingsScreen.classList.toggle("hidden", next !== "settings");
+  controlsScreen.classList.toggle("hidden", next !== "controls");
   menu.classList.toggle("hidden", next === "playing");
   hud.classList.toggle("hidden", !["playing", "paused"].includes(next));
   const liftActive = next === "playing" && state.liftTime > 0;
   liftTransition.classList.toggle("active", liftActive);
   liftTransition.setAttribute("aria-hidden", String(!liftActive));
-  const activeScreen = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen]
+  const activeScreen = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen]
     .find(element => !element.classList.contains("hidden"));
   if (activeScreen) activeScreen.scrollTop = 0;
   window.setTimeout(focusFirst, 30);
@@ -742,7 +744,7 @@ function updateControllerStatus(): void {
 }
 
 function focusables(): HTMLElement[] {
-  const active = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen].find(element => !element.classList.contains("hidden"));
+  const active = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen].find(element => !element.classList.contains("hidden"));
   return active ? Array.from(active.querySelectorAll<HTMLElement>(".focusable:not(:disabled)")) : [];
 }
 function focusFirst(): void {
@@ -754,6 +756,8 @@ function focusFirst(): void {
       ? document.querySelector<HTMLElement>(`[data-character="${selectedCharacter}"]`)
       : screen === "results"
         ? $("#next-track-button")
+        : screen === "controls"
+          ? document.querySelector<HTMLElement>("[data-controls-tab].active")
         : screen === "title"
           ? $("#campaign-button")
           : null;
@@ -782,6 +786,7 @@ function updateMenuInput(): void {
   if (back) {
     ensureMenuMusic();
     if (screen === "settings") closeSettings();
+    else if (screen === "controls") showScreen("settings");
     else if (screen === "character") openCampaign();
     else if (screen === "campaign") showScreen("title");
     else if (screen === "paused") resume();
@@ -798,6 +803,17 @@ function openSettings(): void {
   showScreen("settings");
 }
 function closeSettings(): void { showScreen(settingsReturn); }
+
+function showControlsPanel(panel: "dualsense" | "keyboard"): void {
+  document.querySelectorAll<HTMLButtonElement>("[data-controls-tab]").forEach(button => {
+    const active = button.dataset.controlsTab === panel;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll<HTMLElement>("[data-controls-panel]").forEach(element => {
+    element.classList.toggle("hidden", element.dataset.controlsPanel !== panel);
+  });
+}
 
 function frame(now: number): void {
   const dt = Math.min(.1, Math.max(0, (now - previousTime) / 1_000)); previousTime = now;
@@ -888,6 +904,11 @@ document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button 
 $("#settings-button").addEventListener("click", openSettings);
 $("#pause-settings-button").addEventListener("click", openSettings);
 $("#settings-back-button").addEventListener("click", closeSettings);
+$("#controls-button").addEventListener("click", () => showScreen("controls"));
+$("#controls-back-button").addEventListener("click", () => showScreen("settings"));
+document.querySelectorAll<HTMLButtonElement>("[data-controls-tab]").forEach(button => button.addEventListener("click", () => {
+  showControlsPanel(button.dataset.controlsTab as "dualsense" | "keyboard");
+}));
 $("#resume-button").addEventListener("click", resume);
 $("#quit-button").addEventListener("click", openCampaign);
 $("#restart-button").addEventListener("click", startRun);
@@ -914,6 +935,7 @@ window.addEventListener("keydown", event => {
     if (screen === "playing") pause();
     else if (screen === "paused" && !disconnectedPause) resume();
     else if (screen === "settings") closeSettings();
+    else if (screen === "controls") showScreen("settings");
     else if (screen === "character") openCampaign();
     else if (screen === "campaign") showScreen("title");
   }
