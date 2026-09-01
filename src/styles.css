@@ -572,15 +572,32 @@ button span { margin-right: 8px; }
 @keyframes boost-lines { from { transform: scale(.42) rotate(0); } to { transform: scale(1.05) rotate(1.5deg); } }
 @keyframes boost-lines-soft { from { transform: scale(.5) rotate(4deg); } to { transform: scale(1.12) rotate(6deg); } }
 .mobile-mode .boost-fx { inset: 0; contain: strict; mix-blend-mode: normal; transition: opacity .1s linear; will-change: opacity; background: radial-gradient(ellipse at 50% 58%,transparent 0 34%,rgba(255,201,79,.08) 62%,rgba(255,114,94,.28) 100%); }
-.mobile-mode .boost-fx::before { inset: -12%; transform: translate3d(0,-5%,0); background: repeating-linear-gradient(112deg,transparent 0 8%,rgba(255,247,211,.48) 8.4% 8.8%,transparent 9.2% 17%); -webkit-mask-image: none; mask-image: none; clip-path: polygon(0 0,29% 35%,29% 66%,0 100%,100% 100%,71% 66%,71% 35%,100% 0); will-change: transform,opacity; }
-.mobile-mode .boost-fx::after { display: none; }
+.mobile-mode .boost-fx::before,.mobile-mode .boost-fx::after { top: -24%; bottom: -24%; width: 67%; opacity: 0; -webkit-mask-image: none; mask-image: none; filter: none; will-change: transform,opacity; }
+.mobile-mode .boost-fx::before {
+  left: -17%; right: auto; transform-origin: 100% 55%; clip-path: polygon(0 0,100% 36%,100% 68%,0 100%);
+  background:
+    linear-gradient(166deg,transparent 47.8%,rgba(255,248,218,.72) 48.5% 49.2%,transparent 50%) 0 3%/100% 23% no-repeat,
+    linear-gradient(158deg,transparent 48%,rgba(255,225,143,.62) 48.7% 49.5%,transparent 50.2%) 0 30%/95% 21% no-repeat,
+    linear-gradient(199deg,transparent 47.8%,rgba(255,248,218,.68) 48.5% 49.3%,transparent 50%) 0 61%/98% 22% no-repeat,
+    linear-gradient(205deg,transparent 48%,rgba(255,187,104,.58) 48.8% 49.6%,transparent 50.3%) 0 88%/91% 20% no-repeat;
+}
+.mobile-mode .boost-fx::after {
+  left: auto; right: -17%; transform-origin: 0 55%; clip-path: polygon(0 36%,100% 0,100% 100%,0 68%);
+  background:
+    linear-gradient(194deg,transparent 47.8%,rgba(255,248,218,.72) 48.5% 49.2%,transparent 50%) 100% 3%/100% 23% no-repeat,
+    linear-gradient(202deg,transparent 48%,rgba(255,225,143,.62) 48.7% 49.5%,transparent 50.2%) 100% 30%/95% 21% no-repeat,
+    linear-gradient(161deg,transparent 47.8%,rgba(255,248,218,.68) 48.5% 49.3%,transparent 50%) 100% 61%/98% 22% no-repeat,
+    linear-gradient(155deg,transparent 48%,rgba(255,187,104,.58) 48.8% 49.6%,transparent 50.3%) 100% 88%/91% 20% no-repeat;
+}
 .mobile-mode .boost-fx.active { animation: mobile-boost-pulse .14s ease-out; }
-.mobile-mode .boost-fx.active::before { opacity: .46; animation: mobile-boost-lines .38s linear infinite; }
+.mobile-mode .boost-fx.active::before { opacity: .72; animation: mobile-boost-lines-left .34s cubic-bezier(.2,.55,.4,1) infinite; }
+.mobile-mode .boost-fx.active::after { opacity: .72; animation: mobile-boost-lines-right .34s cubic-bezier(.2,.55,.4,1) infinite; }
 .mobile-mode .boost-fx.special { background: radial-gradient(ellipse at 50% 58%,transparent 0 28%,rgba(255,220,91,.12) 58%,rgba(255,73,38,.46) 100%); animation: mobile-special-boost-pulse .2s ease-in-out infinite alternate; }
-.mobile-mode .boost-fx.special::before { opacity: .68; animation-duration: .24s; }
+.mobile-mode .boost-fx.special::before,.mobile-mode .boost-fx.special::after { opacity: .88; animation-duration: .22s; }
 @keyframes mobile-boost-pulse { from { opacity: .25; } to { opacity: 1; } }
 @keyframes mobile-special-boost-pulse { from { opacity: .78; } to { opacity: 1; } }
-@keyframes mobile-boost-lines { from { transform: translate3d(0,-5%,0); } to { transform: translate3d(0,5%,0); } }
+@keyframes mobile-boost-lines-left { from { transform: translate3d(12%,0,0) scale(.58); } to { transform: translate3d(-4%,0,0) scale(1.14); } }
+@keyframes mobile-boost-lines-right { from { transform: translate3d(-12%,0,0) scale(.58); } to { transform: translate3d(4%,0,0) scale(1.14); } }
 .slow-fx { position: fixed; z-index: 5; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 50%,transparent 24%,rgba(105,203,235,.18) 66%,rgba(82,134,179,.58) 100%); }
 .slow-fx::before { content: ""; position: absolute; inset: -10%; opacity: .7; background: repeating-linear-gradient(116deg,transparent 0 38px,rgba(222,250,255,.5) 40px 43px,transparent 45px 89px); transform: translateX(-35%); }
 .slow-fx i { position: absolute; left: 12%; top: 30%; width: 34px; height: 34px; border: 5px solid rgba(225,251,255,.82); transform: rotate(45deg); }
