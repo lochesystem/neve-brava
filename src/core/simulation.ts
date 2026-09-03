@@ -496,7 +496,7 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
       ? clamp(airborneSpeed, 12, 59)
       : state.speed > 47 ? approach(state.speed, 47, 3 * step) : clamp(airborneSpeed, 12, 47);
     state.lateralSpeed = approach(state.lateralSpeed, intent.steer * Math.min(16, state.speed * 0.3), 9 * step);
-    const spinDirection = Number(intent.spinRight) - Number(intent.spinLeft);
+    const spinDirection = Number(intent.spinLeft) - Number(intent.spinRight);
     state.spin += spinDirection * 5.2 * step;
     if (intent.flipHeld) state.flip += 4.5 * step;
     if (intent.grabHeld) state.grabTime += step;

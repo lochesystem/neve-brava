@@ -39,6 +39,21 @@ describe("simulação da prancha", () => {
     expect(rider.lateralSpeed).toBeGreaterThan(0);
   });
 
+  it("aplica os giros esquerdo e direito no sentido visual correto", () => {
+    const leftSpin = createRider();
+    leftSpin.grounded = false;
+    leftSpin.y = courseHeight(leftSpin.s) + 10;
+    updateRider(leftSpin, { ...EMPTY_INTENT, spinLeft: true }, .1);
+
+    const rightSpin = createRider();
+    rightSpin.grounded = false;
+    rightSpin.y = courseHeight(rightSpin.s) + 10;
+    updateRider(rightSpin, { ...EMPTY_INTENT, spinRight: true }, .1);
+
+    expect(leftSpin.spin).toBeGreaterThan(0);
+    expect(rightSpin.spin).toBeLessThan(0);
+  });
+
   it("ollie sai do chão e retorna por pouso", () => {
     const rider = createRider();
     for (let index = 0; index < 24; index += 1) updateRider(rider, { ...EMPTY_INTENT, jumpHeld: true }, 1 / 60);
