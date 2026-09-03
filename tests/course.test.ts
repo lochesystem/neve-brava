@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COINS, COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, OBSTACLES, RAMPS, courseCenterX, courseFrame, courseHeight, obstacleConflictsWithRamp, setActiveCourse, validateAllCourses, validateCourse } from "../src/core/course.ts";
+import { COINS, COURSES, COURSE_HALF_WIDTH, COURSE_LENGTH, ITEM_BOXES, OBSTACLES, RAMPS, courseCenterFor, courseCenterX, courseFrame, courseHeight, courseHeightFor, obstacleConflictsWithRamp, setActiveCourse, validateAllCourses, validateCourse } from "../src/core/course.ts";
 
 describe("pista", () => {
   it("possui duração, conteúdo e geometria válidos", () => {
@@ -47,6 +47,18 @@ describe("pista", () => {
       expect(OBSTACLES.some(item => !item.decorative)).toBe(true);
       expect(new Set(ITEM_BOXES.map(box => box.item))).toEqual(new Set(["wind", "turbo", "shield"]));
       expect(courseHeight(COURSE_LENGTH)).toBeLessThan(courseHeight(0) - 300);
+    }
+    setActiveCourse(COURSES[0].id);
+  });
+
+  it("expõe para a maquete a mesma geometria usada durante a corrida", () => {
+    for (const course of COURSES) {
+      setActiveCourse(course.id);
+      for (const progress of [0, .2, .5, .8, 1]) {
+        const s = course.length * progress;
+        expect(courseCenterFor(course, s)).toBeCloseTo(courseCenterX(s), 8);
+        expect(courseHeightFor(course, s)).toBeCloseTo(courseHeight(s), 8);
+      }
     }
     setActiveCourse(COURSES[0].id);
   });

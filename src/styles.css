@@ -91,7 +91,8 @@ button, input { font: inherit; }
     radial-gradient(ellipse at 24% 22%, rgba(147,211,232,.42), transparent 31%),
     linear-gradient(180deg, #eaf7fb 0%, #f7fbfa 52%, #ffffff 100%);
 }
-.campaign-screen, .character-screen { width: min(1120px, calc(100vw - 44px)); }
+.campaign-screen { width: min(1220px, calc(100vw - 44px)); }
+.character-screen { width: min(1120px, calc(100vw - 44px)); }
 
 @keyframes enter { from { opacity: 0; transform: translateY(18px) rotate(-.5deg); } }
 
@@ -316,25 +317,52 @@ button span { margin-right: 8px; }
 .campaign-head h2 { margin: 0 0 5px; font-size: clamp(42px,5vw,65px); }
 .campaign-head p { margin: 0; }
 .campaign-head .secondary { flex: 0 0 auto; }
-.track-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin: 22px 0; }
+.track-showcase {
+  position: relative;
+  height: 330px;
+  margin: 16px 0 10px;
+  overflow: hidden;
+  color: var(--paper);
+  background:
+    radial-gradient(circle at 56% 42%,rgba(124,218,217,.24),transparent 36%),
+    linear-gradient(145deg,#315f72 0%,#183b52 52%,#142b3f 100%);
+  border: 3px solid var(--ink);
+  border-radius: 5px 24px 5px 24px;
+  box-shadow: 7px 8px 0 rgba(37,51,72,.48);
+}
+.track-showcase::after { content: ""; position: absolute; inset: 14px; pointer-events: none; border: 1px solid rgba(235,250,247,.16); border-radius: 2px 16px 2px 16px; }
+.track-preview-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.track-showcase-copy { position: absolute; z-index: 2; left: 27px; top: 25px; display: grid; max-width: 330px; text-shadow: 0 2px 16px rgba(10,26,39,.72); }
+.track-showcase-copy small { color: #9fe7df; font: 900 10px "Barlow Condensed",sans-serif; letter-spacing: .18em; }
+.track-showcase-copy strong { margin: 7px 0 5px; font: italic 900 43px/.9 "Barlow Condensed",sans-serif; text-transform: uppercase; }
+.track-showcase-copy span { max-width: 300px; font-size: 11px; line-height: 1.4; opacity: .75; }
+.track-showcase-specs { position: absolute; z-index: 2; right: 25px; bottom: 24px; display: grid; grid-template-columns: repeat(3,auto); gap: 17px; padding: 11px 14px; background: rgba(16,40,57,.82); border-left: 3px solid var(--yellow); box-shadow: 4px 5px 0 rgba(12,29,43,.38); }
+.track-showcase-specs div { display: grid; gap: 2px; min-width: 76px; }
+.track-showcase-specs small { color: rgba(235,250,247,.58); font: 800 8px "Barlow Condensed",sans-serif; letter-spacing: .13em; }
+.track-showcase-specs b { color: var(--yellow); font: italic 900 16px "Barlow Condensed",sans-serif; }
+.track-showcase-caption { position: absolute; z-index: 2; right: 25px; top: 22px; color: rgba(235,250,247,.48); font: 800 8px "Barlow Condensed",sans-serif; letter-spacing: .18em; }
+.track-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin: 14px 0; }
 .track-card {
   position: relative;
-  min-height: 310px;
-  padding: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  gap: 2px 11px;
+  min-height: 76px;
+  padding: 10px 12px;
   overflow: hidden;
   text-align: left;
   background: #dfe9e9;
-  box-shadow: 5px 6px 0 var(--ink);
+  box-shadow: 4px 5px 0 var(--ink);
 }
 .track-card:nth-child(2) { background: #d9edf5; }.track-card:nth-child(3) { background: #dce8d9; }.track-card:nth-child(4) { background: #e8dded; }
 .track-card.selected { background: var(--yellow); transform: translate(2px,2px) rotate(-.5deg); box-shadow: 2px 3px 0 var(--ink); }
-.track-card-number { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: .13em; }
-.track-card h3 { margin: 8px 0 1px; font: italic 900 27px "Barlow Condensed",sans-serif; text-transform: uppercase; }
-.track-card > small { display: block; min-height: 30px; opacity: .68; }
-.track-preview { display: block; width: 100%; height: 150px; margin: 8px 0; }
-.track-preview path:first-child { fill: none; stroke: rgba(37,51,72,.22); stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
-.track-preview path:last-child { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-.track-card p { margin: 5px 0 0; min-height: 47px; font-size: 11px; line-height: 1.35; }
+.track-card-index { grid-row: 1 / 3; color: rgba(37,51,72,.65); font: italic 900 28px "Barlow Condensed",sans-serif; }
+.track-card > span { display: grid; align-self: end; }
+.track-card > span small { font: 800 7px "Barlow Condensed",sans-serif; letter-spacing: .13em; opacity: .6; }
+.track-card > span strong { font: italic 900 18px/.95 "Barlow Condensed",sans-serif; text-transform: uppercase; }
+.track-card > em { align-self: start; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 9px "Avenir Next",sans-serif; opacity: .58; }
 .campaign-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 17px; border-top: 2px dashed rgba(37,51,72,.35); }
 .campaign-footer small,.campaign-footer b,.campaign-footer span { display: block; }
 .campaign-footer small { font: 800 10px "Barlow Condensed",sans-serif; letter-spacing: .15em; }
@@ -780,11 +808,16 @@ button span { margin-right: 8px; }
   .mobile-mode .campaign-head { display: flex; margin-bottom: 6px; }
   .mobile-mode .campaign-head h2 { font-size: 28px; }
   .mobile-mode .campaign-head p:not(.eyebrow) { display: none; }
-  .mobile-mode .track-grid { flex: 1; min-height: 0; grid-template-columns: repeat(4,1fr); gap: 6px; margin: 5px 0; }
-  .mobile-mode .track-card { min-height: 168px; padding: 7px; }
-  .mobile-mode .track-card h3 { font-size: 20px; }
-  .mobile-mode .track-preview { height: 76px; }
-  .mobile-mode .track-card p { display: none; }
+  .mobile-mode .track-showcase { flex: 1; min-height: 135px; height: auto; margin: 3px 0 5px; border-width: 2px; box-shadow: 4px 4px 0 rgba(37,51,72,.45); }
+  .mobile-mode .track-showcase::after { inset: 7px; }
+  .mobile-mode .track-showcase-copy { left: 14px; top: 12px; max-width: 190px; }
+  .mobile-mode .track-showcase-copy small { font-size: 7px; }.mobile-mode .track-showcase-copy strong { margin: 3px 0; font-size: 25px; }.mobile-mode .track-showcase-copy span { max-width: 180px; font-size: 7px; }
+  .mobile-mode .track-showcase-caption { top: 10px; right: 13px; font-size: 6px; }
+  .mobile-mode .track-showcase-specs { right: 12px; bottom: 10px; gap: 8px; padding: 5px 7px; border-left-width: 2px; }
+  .mobile-mode .track-showcase-specs div { min-width: 48px; }.mobile-mode .track-showcase-specs small { font-size: 5px; }.mobile-mode .track-showcase-specs b { font-size: 10px; }
+  .mobile-mode .track-grid { flex: 0 0 auto; grid-template-columns: repeat(4,1fr); gap: 5px; margin: 4px 0; }
+  .mobile-mode .track-card { grid-template-columns: auto 1fr; min-height: 48px; padding: 4px 6px; gap: 1px 5px; }
+  .mobile-mode .track-card-index { font-size: 18px; }.mobile-mode .track-card > span small { font-size: 5px; }.mobile-mode .track-card > span strong { font-size: 12px; }.mobile-mode .track-card > em { font-size: 6px; }
   .mobile-mode .campaign-footer { justify-content: center; margin-top: 5px; padding-top: 5px; }
   .mobile-mode .campaign-footer > div { display: none; }
   .mobile-mode .campaign-footer button { width: min(320px,70vw); }
@@ -849,12 +882,12 @@ button span { margin-right: 8px; }
   .mobile-mode .campaign-head { height: 38px; margin-bottom: 2px; }
   .mobile-mode .campaign-head .eyebrow { margin: 0; font-size: 8px; }
   .mobile-mode .campaign-head h2 { font-size: 22px; line-height: .9; }
+  .mobile-mode .track-showcase { min-height: 118px; margin: 2px 0 3px; }
+  .mobile-mode .track-showcase-copy { top: 9px; }.mobile-mode .track-showcase-copy strong { font-size: 21px; }
+  .mobile-mode .track-showcase-specs { bottom: 7px; }
   .mobile-mode .track-grid { gap: 4px; margin: 3px 0; }
-  .mobile-mode .track-card { min-height: 136px; padding: 5px; }
-  .mobile-mode .track-card-number { font-size: 8px; }
-  .mobile-mode .track-card h3 { margin-top: 4px; font-size: 16px; line-height: .92; }
-  .mobile-mode .track-card small { font-size: 8px; }
-  .mobile-mode .track-preview { height: clamp(53px,22vh,92px); }
+  .mobile-mode .track-card { min-height: 42px; padding: 3px 5px; }
+  .mobile-mode .track-card-index { font-size: 16px; }.mobile-mode .track-card > span strong { font-size: 11px; }
   .mobile-mode .campaign-footer { margin-top: 3px; padding-top: 3px; }
 
   .mobile-mode .character-head { height: 55px; }
@@ -888,8 +921,12 @@ button span { margin-right: 8px; }
   .title-panel h2 { font-size: clamp(38px,12vw,52px); }
   .campaign-screen { width: calc(100vw - 20px); padding: 18px; }
   .campaign-head { display: block; }.campaign-head .secondary { margin-top: 12px; }
+  .track-showcase { height: 270px; }
+  .track-showcase-copy { left: 18px; top: 18px; }.track-showcase-copy strong { font-size: 34px; }
+  .track-showcase-caption { display: none; }
+  .track-showcase-specs { left: 18px; right: 18px; bottom: 16px; justify-content: space-between; }
   .track-grid { grid-template-columns: 1fr 1fr; }
-  .track-card { min-height: 245px; }.track-preview { height: 105px; }.track-card p { display: none; }
+  .track-card { min-height: 72px; }
   .campaign-footer { align-items: stretch; flex-direction: column; }.campaign-footer button { width: 100%; }
   .character-screen { width: calc(100vw - 20px); height: calc(100vh - 18px); }
   .character-head { grid-template-columns: auto 1fr; gap: 8px; }

@@ -244,19 +244,21 @@ export function rampSurfaceElevation(s: number, lateral: number): number {
   return 0;
 }
 
-export function courseHeight(s: number): number {
-  const progress = clamp(s, 0, COURSE_LENGTH);
-  return activeCourse.startHeight - progress * activeCourse.descent
-    + activeCourse.heightWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
+export function courseHeightFor(course: CourseDefinition, s: number): number {
+  const progress = clamp(s, 0, course.length);
+  return course.startHeight - progress * course.descent
+    + course.heightWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
 }
+export function courseHeight(s: number): number { return courseHeightFor(activeCourse, s); }
 export function courseSlope(s: number): number {
   const epsilon = .5;
   return (courseHeight(s + epsilon) - courseHeight(s - epsilon)) / (epsilon * 2);
 }
-export function courseCenterX(s: number): number {
-  const progress = clamp(s, 0, COURSE_LENGTH);
-  return activeCourse.curveWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
+export function courseCenterFor(course: CourseDefinition, s: number): number {
+  const progress = clamp(s, 0, course.length);
+  return course.curveWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
 }
+export function courseCenterX(s: number): number { return courseCenterFor(activeCourse, s); }
 export function courseFrame(s: number): { tx: number; tz: number; nx: number; nz: number; heading: number } {
   const epsilon = .5, dx = (courseCenterX(s + epsilon) - courseCenterX(s - epsilon)) / (epsilon * 2), length = Math.hypot(dx, 1);
   const tx = dx / length, tz = -1 / length, nx = -tz, nz = tx;

@@ -1,6 +1,6 @@
 import "./styles.css";
 import {
-  COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
+  COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterFor, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
   type CourseDefinition, type ItemKind,
 } from "./core/course.ts";
 import {
@@ -16,6 +16,7 @@ import {
 import { InputManager, type MenuAction } from "./input/InputManager.ts";
 import { AudioManager, type GiruVoiceCue, type GuyVoiceCue, type SnowmanVoiceCue, type YetiVoiceCue } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
+import { TrackPreview } from "./view/TrackPreview.ts";
 
 type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings" | "controls";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
@@ -38,6 +39,7 @@ const input = new InputManager();
 const audio = new AudioManager();
 const view = new GameView(canvas, input.touchEnabled);
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
+const trackPreview = new TrackPreview($("#track-preview-canvas") as HTMLCanvasElement, input.touchEnabled);
 
 if (input.touchEnabled) document.body.classList.add("mobile-mode");
 input.bindTouchControls($("#touch-controls"));
@@ -184,13 +186,8 @@ function setupPwa(): void {
 
 setupPwa();
 
-function centerFor(course: CourseDefinition, s: number): number {
-  const progress = Math.min(course.length, Math.max(0, s));
-  return course.curveWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
-}
-
 function mapGeometry(course: CourseDefinition, width: number, height: number, padding: number): { path: string; projection: MapProjection } {
-  const samples = Array.from({ length: 161 }, (_, index) => ({ s: index / 160 * course.length, x: centerFor(course, index / 160 * course.length) }));
+  const samples = Array.from({ length: 161 }, (_, index) => ({ s: index / 160 * course.length, x: courseCenterFor(course, index / 160 * course.length) }));
   const minX = Math.min(...samples.map(point => point.x)) - course.halfWidth * .7;
   const maxX = Math.max(...samples.map(point => point.x)) + course.halfWidth * .7;
   const spanX = Math.max(1, maxX - minX);
@@ -202,30 +199,37 @@ function mapGeometry(course: CourseDefinition, width: number, height: number, pa
   };
 }
 
-function previewPath(course: CourseDefinition): string {
-  return mapGeometry(course, 180, 150, 15).path;
-}
-
 function renderTrackCards(): void {
   const grid = $("#track-grid");
   grid.innerHTML = COURSES.map((course, index) => `
     <button class="track-card focusable ${index === selectedCourseIndex ? "selected" : ""}" data-track-index="${index}" type="button">
-      <span class="track-card-number"><b>ETAPA ${String(course.order).padStart(2, "0")}</b><em>${course.difficulty}</em></span>
-      <h3>${course.name}</h3><small>${course.subtitle}</small>
-      <svg class="track-preview" viewBox="0 0 180 150" aria-hidden="true"><path d="${previewPath(course)}"></path><path d="${previewPath(course)}"></path></svg>
-      <p>${course.description}</p>
+      <b class="track-card-index">${String(course.order).padStart(2, "0")}</b>
+      <span><small>${course.difficulty}</small><strong>${course.name}</strong></span>
+      <em>${course.subtitle}</em>
     </button>`).join("");
-  grid.querySelectorAll<HTMLButtonElement>("[data-track-index]").forEach(button => button.addEventListener("click", () => {
-    selectedCourseIndex = Number(button.dataset.trackIndex);
-    updateSelectedCourseCopy();
-    openCharacterSelect();
-  }));
+  grid.querySelectorAll<HTMLButtonElement>("[data-track-index]").forEach(button => {
+    const select = () => {
+      selectedCourseIndex = Number(button.dataset.trackIndex);
+      grid.querySelectorAll(".track-card").forEach(card => card.classList.toggle("selected", card === button));
+      updateSelectedCourseCopy();
+    };
+    button.addEventListener("focus", select);
+    button.addEventListener("pointerenter", select);
+    button.addEventListener("click", () => { select(); openCharacterSelect(); });
+  });
 }
 
 function updateSelectedCourseCopy(): void {
   const course = COURSES[selectedCourseIndex];
+  trackPreview.setCourse(course);
   $("#selected-track-name").textContent = course.name;
   $("#selected-track-copy").textContent = `${course.subtitle} · ${course.difficulty} · ${(course.length / 1_000).toFixed(1)} km`;
+  $("#track-showcase-stage").textContent = `ETAPA ${String(course.order).padStart(2, "0")} · ${course.difficulty}`;
+  $("#track-showcase-name").textContent = course.name;
+  $("#track-showcase-subtitle").textContent = course.description;
+  $("#track-showcase-length").textContent = `${(course.length / 1_000).toFixed(1)} KM`;
+  $("#track-showcase-sections").textContent = `${course.sections.length} TRECHOS`;
+  $("#track-showcase-ramps").textContent = `${course.ramps.length} RAMPAS`;
 }
 
 function buildRaceMap(): void {
@@ -302,6 +306,7 @@ function showScreen(next: Screen): void {
   resultsScreen.classList.toggle("hidden", next !== "results");
   settingsScreen.classList.toggle("hidden", next !== "settings");
   controlsScreen.classList.toggle("hidden", next !== "controls");
+  trackPreview.setVisible(next === "campaign");
   menu.classList.toggle("hidden", next === "playing");
   hud.classList.toggle("hidden", !["playing", "paused"].includes(next));
   const liftActive = next === "playing" && state.liftTime > 0;
