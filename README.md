@@ -13,6 +13,16 @@ npm install
 npm run dev
 ```
 
+Para testar o multiplayer, execute também o servidor de salas e sincronização em outro terminal:
+
+```bash
+npm run dev:server
+```
+
+Abra o jogo em duas abas ou dispositivos. Em **MULTIPLAYER**, é possível buscar uma partida rápida ou criar uma sala privada com código de quatro caracteres. As salas aceitam de dois a quatro jogadores; vagas restantes continuam sendo ocupadas pelos oponentes do jogo.
+
+Em produção, o site estático e o servidor são publicados separadamente. O arquivo `render.yaml` configura o backend no Render; depois de criar o serviço pelo blueprint, informe a URL resultante no build do site com `VITE_MULTIPLAYER_URL`. O valor padrão já aponta para `https://neve-brava-multiplayer.onrender.com`.
+
 Abra o endereço exibido pelo Vite, conecte um DualSense por USB ou Bluetooth e pressione um botão para que o navegador exponha o controle. O modo normal exige um DualSense reconhecido. Para desenvolvimento sem hardware:
 
 ```text
@@ -65,6 +75,8 @@ npm run check
 - moedas de 100 créditos, caixas de armas por 200 e itens de vento, turbo e escudo;
 - perfis Alta, Média e Performance;
 - simulação em passo fixo de 60 Hz e regras críticas headless.
+- salas multiplayer privadas por código e busca rápida, com escolha de piloto/pista, confirmação dos jogadores e largada sincronizada;
+- sincronização online dos pilotos a 15 Hz e propagação de itens, especiais, quedas e chegada entre dois a quatro jogadores.
 
 ## Arquitetura
 
@@ -72,6 +84,9 @@ npm run check
 src/core   — pista, matemática, simulação e pontuação sem Three.js/DOM
 src/input  — Gamepad API, intents, rumble e áudio
 src/view   — Three.js, câmera, mundo, personagem e partículas
+src/multiplayer — cliente Socket.IO e adaptação da corrida local para rede
+server     — servidor de salas, matchmaking e retransmissão em tempo real
+shared     — contrato de rede compartilhado entre navegador e servidor
 src/main   — máquina de estados, único RAF, UI e composição
 tests      — regras puras e invariantes da pista
 ```

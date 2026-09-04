@@ -17,8 +17,18 @@ import { InputManager, type MenuAction } from "./input/InputManager.ts";
 import { AudioManager, type GiruVoiceCue, type GuyVoiceCue, type SnowmanVoiceCue, type YetiVoiceCue } from "./input/AudioManager.ts";
 import { GameView, type Quality } from "./view/GameView.ts";
 import { TrackPreview } from "./view/TrackPreview.ts";
+import { MultiplayerClient } from "./multiplayer/MultiplayerClient.ts";
+import type {
+  MultiplayerAction,
+  MultiplayerCharacterId,
+  MultiplayerCourseId,
+  MultiplayerRoom,
+  NetworkRacerState,
+  RaceStart,
+  RacerStatePacket,
+} from "../shared/multiplayer.ts";
 
-type Screen = "title" | "campaign" | "character" | "playing" | "paused" | "results" | "settings" | "controls";
+type Screen = "title" | "campaign" | "character" | "multiplayer" | "playing" | "paused" | "results" | "settings" | "controls";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 type SnowballSpecial = { active: boolean; owner: CharacterId; s: number; x: number; lap: number; hit: Set<CharacterId> };
 
@@ -31,6 +41,7 @@ const menu = document.querySelector<HTMLElement>("#menu")!;
 const titleScreen = document.querySelector<HTMLElement>("#title-screen")!;
 const campaignScreen = document.querySelector<HTMLElement>("#campaign-screen")!;
 const characterScreen = document.querySelector<HTMLElement>("#character-screen")!;
+const multiplayerScreen = document.querySelector<HTMLElement>("#multiplayer-screen")!;
 const pauseScreen = document.querySelector<HTMLElement>("#pause-screen")!;
 const resultsScreen = document.querySelector<HTMLElement>("#results-screen")!;
 const settingsScreen = document.querySelector<HTMLElement>("#settings-screen")!;
@@ -40,6 +51,7 @@ const audio = new AudioManager();
 const view = new GameView(canvas, input.touchEnabled);
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 const trackPreview = new TrackPreview($("#track-preview-canvas") as HTMLCanvasElement, input.touchEnabled);
+const multiplayer = new MultiplayerClient();
 
 if (input.touchEnabled) document.body.classList.add("mobile-mode");
 input.bindTouchControls($("#touch-controls"));
@@ -99,6 +111,14 @@ let selectedCourseIndex = 0;
 let selectedCharacter: CharacterId = "snowman";
 let characterSelectionActive = false;
 let hasChosenCharacter = false;
+let multiplayerRoom: MultiplayerRoom | null = null;
+let multiplayerActive = false;
+let multiplayerSequence = 0;
+let multiplayerSendTimer = 0;
+let multiplayerReady = false;
+let multiplayerStarting = false;
+const remoteSlotByPlayer = new Map<string, number>();
+const remoteSequenceByPlayer = new Map<string, number>();
 let accumulator = 0;
 let previousTime = performance.now();
 let countdown = 3.35;
@@ -300,10 +320,11 @@ function showScreen(next: Screen): void {
   screen = next;
   document.body.dataset.screen = next;
   menu.dataset.screen = next;
-  canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "settings", "controls", "results"].includes(next));
+  canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "multiplayer", "settings", "controls", "results"].includes(next));
   titleScreen.classList.toggle("hidden", next !== "title");
   campaignScreen.classList.toggle("hidden", next !== "campaign");
   characterScreen.classList.toggle("hidden", next !== "character");
+  multiplayerScreen.classList.toggle("hidden", next !== "multiplayer");
   pauseScreen.classList.toggle("hidden", next !== "paused");
   resultsScreen.classList.toggle("hidden", next !== "results");
   settingsScreen.classList.toggle("hidden", next !== "settings");
@@ -314,13 +335,14 @@ function showScreen(next: Screen): void {
   const liftActive = next === "playing" && state.liftTime > 0;
   liftTransition.classList.toggle("active", liftActive);
   liftTransition.setAttribute("aria-hidden", String(!liftActive));
-  const activeScreen = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen]
+  const activeScreen = [titleScreen, campaignScreen, characterScreen, multiplayerScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen]
     .find(element => !element.classList.contains("hidden"));
   if (activeScreen) activeScreen.scrollTop = 0;
   window.setTimeout(focusFirst, 30);
 }
 
 function openCampaign(): void {
+  if (multiplayerActive || multiplayerRoom) leaveMultiplayer();
   audio.setMenuTrack();
   document.documentElement.dataset.musicTrack = "menu";
   audio.start();
@@ -328,6 +350,132 @@ function openCampaign(): void {
   renderTrackCards();
   updateSelectedCourseCopy();
   showScreen("campaign");
+}
+
+function multiplayerProfile(): { name: string; character: MultiplayerCharacterId } {
+  const name = ($("#multiplayer-name") as HTMLInputElement).value.trim().slice(0, 16) || "PILOTO";
+  const selected = document.querySelector<HTMLElement>("[data-multiplayer-character].selected")?.dataset.multiplayerCharacter;
+  return { name, character: (selected ?? "snowman") as MultiplayerCharacterId };
+}
+
+function multiplayerFeedback(message: string): void {
+  $("#multiplayer-feedback").textContent = message;
+}
+
+function openMultiplayer(): void {
+  audio.setMenuTrack();
+  document.documentElement.dataset.musicTrack = "menu";
+  audio.start();
+  multiplayer.connect();
+  multiplayerFeedback("");
+  renderMultiplayerRoom();
+  showScreen("multiplayer");
+}
+
+function leaveMultiplayer(): void {
+  multiplayer.leave();
+  multiplayerRoom = null;
+  multiplayerActive = false;
+  multiplayerReady = false;
+  multiplayerStarting = false;
+  remoteSlotByPlayer.clear();
+  remoteSequenceByPlayer.clear();
+  renderMultiplayerRoom();
+}
+
+function multiplayerPlayerList(room: MultiplayerRoom): string {
+  return room.players.map(player => `
+    <li class="${player.ready ? "ready" : ""}">
+      <img src="${import.meta.env.BASE_URL}images/minimap/${player.character}.png" alt="" />
+      <span><b>${player.name}${player.id === multiplayer.playerId ? " · VOCÊ" : ""}</b><small>${characterById(player.character as CharacterId).name}${player.host ? " · ANFITRIÃO" : ""}</small></span>
+      <em>${player.ready ? "PRONTO" : "AJUSTANDO"}</em>
+    </li>`).join("");
+}
+
+function renderMultiplayerRoom(): void {
+  const room = multiplayerRoom;
+  $("#multiplayer-entry").classList.toggle("hidden", Boolean(room));
+  $("#multiplayer-room").classList.toggle("hidden", !room);
+  if (!room) return;
+  const self = room.players.find(player => player.id === multiplayer.playerId);
+  const isHost = Boolean(self?.host);
+  multiplayerReady = Boolean(self?.ready);
+  $("#multiplayer-room-code").textContent = room.code;
+  $("#multiplayer-room-status").textContent = room.players.length < 2
+    ? room.mode === "quick" ? "BUSCANDO ADVERSÁRIO…" : "AGUARDANDO PILOTOS"
+    : `${room.players.length}/4 PILOTOS NA SALA`;
+  $("#multiplayer-player-list").innerHTML = multiplayerPlayerList(room);
+  document.querySelectorAll<HTMLButtonElement>("[data-multiplayer-character]").forEach(button => {
+    const character = button.dataset.multiplayerCharacter as MultiplayerCharacterId;
+    const occupied = room.players.some(player => player.id !== multiplayer.playerId && player.character === character);
+    button.disabled = occupied || multiplayerStarting;
+    button.classList.toggle("selected", self?.character === character);
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-multiplayer-course]").forEach(button => {
+    button.disabled = !isHost || multiplayerStarting;
+    button.classList.toggle("selected", button.dataset.multiplayerCourse === room.courseId);
+  });
+  $("#multiplayer-course-owner").textContent = isHost ? "· VOCÊ ESCOLHE" : "· ANFITRIÃO ESCOLHE";
+  const readyButton = $("#ready-button") as HTMLButtonElement;
+  readyButton.disabled = multiplayerStarting;
+  readyButton.textContent = multiplayerReady ? "○ CANCELAR PRONTO" : "✕ ESTOU PRONTO";
+  readyButton.classList.toggle("secondary", multiplayerReady);
+  readyButton.classList.toggle("primary", !multiplayerReady);
+  const startButton = $("#start-multiplayer-button") as HTMLButtonElement;
+  startButton.classList.toggle("hidden", !isHost || room.mode === "quick");
+  startButton.disabled = multiplayerStarting || room.players.length < 2 || !room.players.every(player => player.ready);
+}
+
+async function multiplayerOperation(operation: () => Promise<MultiplayerRoom>): Promise<void> {
+  multiplayerFeedback("");
+  try {
+    multiplayerRoom = await operation();
+    renderMultiplayerRoom();
+  } catch (error) {
+    multiplayerFeedback(error instanceof Error ? error.message : "Não foi possível conectar à sala.");
+  }
+}
+
+function configureMultiplayerRacers(room: MultiplayerRoom): void {
+  const self = room.players.find(player => player.id === multiplayer.playerId);
+  if (!self) return;
+  selectedCharacter = self.character as CharacterId;
+  characterSelectionActive = true;
+  hasChosenCharacter = true;
+  const remotePlayers = room.players.filter(player => player.id !== multiplayer.playerId);
+  const used = new Set(room.players.map(player => player.character));
+  const botCharacters = CHARACTERS.map(character => character.id).filter(character => !used.has(character));
+  const entries = [
+    ...remotePlayers.map(player => ({ character: player.character as CharacterId, playerId: player.id })),
+    ...botCharacters.map(character => ({ character, playerId: null })),
+  ].slice(0, 3);
+  while (entries.length < 3) entries.push({ character: CHARACTERS.find(character => character.id !== selectedCharacter)!.id, playerId: null });
+  const starts = [-3.15, 3.1, 7.4];
+  const states = entries.map((entry, index) => createOpponent(entry.character, starts[index]));
+  [rival, guy, giru] = states as [RivalState, RivalState, RivalState];
+  previousRival = { ...rival }; previousGuy = { ...guy }; previousGiru = { ...giru };
+  remoteSlotByPlayer.clear();
+  remoteSequenceByPlayer.clear();
+  entries.forEach((entry, index) => { if (entry.playerId) remoteSlotByPlayer.set(entry.playerId, index); });
+  view.setRacerCharacters(selectedCharacter, rival.id, guy.id, giru.id);
+  updateMapPortraits();
+}
+
+function beginMultiplayerRace(start: RaceStart): void {
+  multiplayerRoom = start.room;
+  const self = start.room.players.find(player => player.id === multiplayer.playerId);
+  if (!self) return;
+  selectedCourseIndex = Math.max(0, COURSES.findIndex(course => course.id === start.room.courseId));
+  selectedCharacter = self.character as CharacterId;
+  characterSelectionActive = true;
+  hasChosenCharacter = true;
+  multiplayerActive = true;
+  multiplayerStarting = true;
+  startRun();
+  configureMultiplayerRacers(start.room);
+  countdown = Math.max(.35, (start.startsAt - Date.now()) / 1_000);
+  multiplayerSequence = 0;
+  multiplayerSendTimer = 0;
 }
 
 function createOpponent(character: CharacterId, startX: number): RivalState {
@@ -456,7 +604,8 @@ function finish(): void {
       <time>${formatTime(entry.time)}</time>
     </li>`).join("");
   const finalCourse = selectedCourseIndex >= COURSES.length - 1;
-  $("#next-track-button").textContent = finalCourse ? "✕ CONCLUIR CAMPANHA" : "✕ PRÓXIMA PISTA";
+  $("#next-track-button").textContent = multiplayerActive ? "✕ VOLTAR AO MULTIPLAYER" : finalCourse ? "✕ CONCLUIR CAMPANHA" : "✕ PRÓXIMA PISTA";
+  $("#restart-button").classList.toggle("hidden", multiplayerActive);
   showScreen("results");
 }
 
@@ -472,6 +621,72 @@ function handleRivalEvent(event: RivalEvent, opponent: RivalState): void {
 }
 
 function opponents(): RivalState[] { return [rival, guy, giru]; }
+
+function setOpponentAt(index: number, next: RivalState): void {
+  if (index === 0) { previousRival = { ...rival }; rival = next; }
+  else if (index === 1) { previousGuy = { ...guy }; guy = next; }
+  else { previousGiru = { ...giru }; giru = next; }
+}
+
+function networkStateOfPlayer(): NetworkRacerState {
+  return {
+    s: state.s, x: state.x, y: state.y, speed: state.speed, lateralSpeed: state.lateralSpeed,
+    grounded: state.grounded, verticalSpeed: state.verticalSpeed, carve: state.carve, heading: state.heading,
+    spin: state.spin, flip: state.flip, recovering: state.recovering, tumbleTime: state.tumbleTime,
+    tumbleDirection: state.tumbleDirection, lap: state.lap, liftTime: state.liftTime, finished: state.finished,
+    elapsed: state.elapsed, item: state.item, credits: state.credits, turboTime: state.turboTime,
+    specialTurboTime: state.specialTurboTime, shieldTime: state.shieldTime, slowTime: state.slowTime,
+    timeWarpTime: state.timeWarpTime, freezeTime: state.freezeTime,
+  };
+}
+
+function applyRemoteState(packet: RacerStatePacket): void {
+  if (!multiplayerActive) return;
+  const slot = remoteSlotByPlayer.get(packet.playerId);
+  if (slot === undefined || packet.sequence <= (remoteSequenceByPlayer.get(packet.playerId) ?? -1)) return;
+  remoteSequenceByPlayer.set(packet.playerId, packet.sequence);
+  const current = opponents()[slot];
+  if (!current) return;
+  const remote = packet.state;
+  setOpponentAt(slot, {
+    ...current,
+    s: remote.s, x: remote.x, y: remote.y, speed: remote.speed, lateralSpeed: remote.lateralSpeed,
+    grounded: remote.grounded, verticalSpeed: remote.verticalSpeed, carve: remote.carve, heading: remote.heading,
+    spin: remote.spin, airTime: remote.grounded ? 0 : current.airTime + 1 / 15,
+    stun: remote.recovering, tumble: remote.tumbleTime, lap: remote.lap, liftTime: remote.liftTime,
+    finished: remote.finished, finishTime: remote.finished ? remote.elapsed : current.finishTime, elapsed: remote.elapsed,
+    item: remote.item, credits: remote.credits, turboTime: remote.turboTime, specialTurboTime: remote.specialTurboTime,
+    shieldTime: remote.shieldTime, slowTime: remote.slowTime, timeWarpTime: remote.timeWarpTime, freezeTime: remote.freezeTime,
+  });
+}
+
+function remotePlayerIdFor(opponent: RivalState): string | undefined {
+  const slot = opponents().indexOf(opponent);
+  return [...remoteSlotByPlayer].find(([, candidateSlot]) => candidateSlot === slot)?.[0];
+}
+
+function applyRemoteAction(action: MultiplayerAction): void {
+  if (!multiplayerActive || action.actorId === multiplayer.playerId) return;
+  const sourceSlot = remoteSlotByPlayer.get(action.actorId);
+  const source = sourceSlot === undefined ? null : opponents()[sourceSlot];
+  if (!source) return;
+  if (action.type === "special") {
+    useRivalSpecial(source);
+    return;
+  }
+  if (action.type === "wind" && action.targetId === multiplayer.playerId) {
+    const events = applyRiderWindHit(state);
+    view.windShot(source, state);
+    handleAppliedRiderEvents(events);
+    return;
+  }
+  if (action.type === "blizzard") {
+    handleAppliedRiderEvents(applyRiderBlizzardSlow(state));
+    slowFxTimer = 1.35;
+    slowFx.classList.add("active");
+    showToast(`${source.name} USOU NEVASCA!`, "wind");
+  }
+}
 
 function handleAppliedRiderEvents(events: GameEvent[]): void {
   events.forEach(handleEvent);
@@ -594,6 +809,7 @@ function useCharacterSpecial(): void {
   playGiruVoice("special");
   playYetiVoice("special");
   playGuyVoice("special");
+  if (multiplayerActive) multiplayer.sendAction({ id: crypto.randomUUID(), type: "special" });
 
   if (selectedCharacter === "snowman") {
     snowballSpecial = { active: true, owner: selectedCharacter, s: state.s, x: 0, lap: state.lap, hit: new Set() };
@@ -668,6 +884,8 @@ function handleEvent(event: GameEvent): void {
         playGiruVoice("attack");
         playYetiVoice("attack");
         playGuyVoice("attack");
+        const targetId = remotePlayerIdFor(target);
+        if (multiplayerActive && targetId) multiplayer.sendAction({ id: crypto.randomUUID(), type: "wind", targetId });
       }
     } else if (event.item === "blizzard") {
       const affectedRivals = [rival, guy, giru].filter(applyBlizzardSlow).length;
@@ -676,6 +894,7 @@ function handleEvent(event: GameEvent): void {
       input.pulse(.5, .72, 260);
       showToast("NEVASCA! · RIVAIS LENTOS", "wind");
       if (affectedRivals > 0) { playGiruVoice("attack"); playYetiVoice("attack"); playGuyVoice("attack"); }
+      if (multiplayerActive) multiplayer.sendAction({ id: crypto.randomUUID(), type: "blizzard" });
     } else showToast(event.item === "turbo" ? "TURBO!" : "ESCUDO ATIVO!", event.item === "turbo" ? "coin" : "clean");
   }
   if (event.type === "SHIELD_BREAK") { input.pulse(.55, .8, 180); showToast("ESCUDO SALVOU!", "clean"); }
@@ -701,7 +920,11 @@ function handleEvent(event: GameEvent): void {
     input.pulse(.38, .55, 170);
     showToast(event.lap === RACE_LAPS ? "ÚLTIMA VOLTA!" : `VOLTA ${event.lap}/${RACE_LAPS}`, "clean");
   }
-  if (event.type === "FINISH") { input.pulse(.45, .8, 420); window.setTimeout(finish, 500); }
+  if (event.type === "FINISH") {
+    input.pulse(.45, .8, 420);
+    if (multiplayerActive) multiplayer.sendFinish(state.elapsed);
+    window.setTimeout(finish, 500);
+  }
 }
 
 function showToast(text: string, variant = ""): void {
@@ -764,7 +987,7 @@ function updateControllerStatus(): void {
 }
 
 function focusables(): HTMLElement[] {
-  const active = [titleScreen, campaignScreen, characterScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen].find(element => !element.classList.contains("hidden"));
+  const active = [titleScreen, campaignScreen, characterScreen, multiplayerScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen].find(element => !element.classList.contains("hidden"));
   return active ? Array.from(active.querySelectorAll<HTMLElement>(".focusable:not(:disabled)")) : [];
 }
 function focusFirst(): void {
@@ -776,6 +999,8 @@ function focusFirst(): void {
   }
   const preferred = screen === "campaign"
     ? document.querySelector<HTMLElement>(`[data-track-index="${selectedCourseIndex}"]`)
+    : screen === "multiplayer"
+      ? multiplayerRoom ? $("#ready-button") : $("#quick-match-button")
     : screen === "results"
         ? $("#next-track-button")
         : screen === "controls"
@@ -838,6 +1063,7 @@ function updateMenuInput(): void {
     if (screen === "settings") closeSettings();
     else if (screen === "controls") showScreen("settings");
     else if (screen === "character") openCampaign();
+    else if (screen === "multiplayer") { leaveMultiplayer(); showScreen("title"); }
     else if (screen === "campaign") showScreen("title");
     else if (screen === "paused") resume();
   }
@@ -889,11 +1115,11 @@ function frame(now: number): void {
         previousGuy = { ...guy };
         previousGiru = { ...giru };
         for (const event of updateRider(state, stepIntent, fixedStep, currentRacePosition())) handleEvent(event);
-        for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep, racePositionOf(rival))) handleRivalEvent(event, rival);
+        if (![...remoteSlotByPlayer.values()].includes(0)) for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep, racePositionOf(rival))) handleRivalEvent(event, rival);
         const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
-        for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep, racePositionOf(guy))) handleRivalEvent(event, guy);
+        if (![...remoteSlotByPlayer.values()].includes(1)) for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep, racePositionOf(guy))) handleRivalEvent(event, guy);
         const frontRunner = raceProgress(guy.lap, guy.s) > raceProgress(leader.lap, leader.s) ? guy : leader;
-        for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep, racePositionOf(giru))) handleRivalEvent(event, giru);
+        if (![...remoteSlotByPlayer.values()].includes(2)) for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep, racePositionOf(giru))) handleRivalEvent(event, giru);
         if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);
@@ -916,6 +1142,13 @@ function frame(now: number): void {
         accumulator -= fixedStep; firstStep = false;
       }
       audio.update(state);
+      if (multiplayerActive) {
+        multiplayerSendTimer += dt;
+        if (multiplayerSendTimer >= 1 / 15) {
+          multiplayerSendTimer %= 1 / 15;
+          multiplayer.sendState(multiplayerSequence++, networkStateOfPlayer());
+        }
+      }
       if (state.grounded && Math.abs(state.carve) > .45 && state.speed > 16) input.pulse(.04, .12 + Math.abs(state.carve) * .08, 38, 90);
     }
     hudTimer += dt; updateHud(); input.consumeMenu("confirm"); input.consumeMenu("back"); input.consumeAnyDirection();
@@ -931,6 +1164,50 @@ function frame(now: number): void {
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);
+$("#multiplayer-button").addEventListener("click", openMultiplayer);
+$("#multiplayer-back-button").addEventListener("click", () => { leaveMultiplayer(); showScreen("title"); });
+$("#create-room-button").addEventListener("click", () => void multiplayerOperation(() => multiplayer.createRoom(multiplayerProfile())));
+$("#quick-match-button").addEventListener("click", () => void multiplayerOperation(() => multiplayer.quickMatch(multiplayerProfile())));
+$("#join-room-button").addEventListener("click", () => {
+  const code = ($("#room-code-input") as HTMLInputElement).value;
+  if (code.trim().length !== 4) { multiplayerFeedback("Digite os quatro caracteres da sala."); return; }
+  void multiplayerOperation(() => multiplayer.joinRoom(code, multiplayerProfile()));
+});
+$("#copy-room-code-button").addEventListener("click", () => {
+  if (!multiplayerRoom) return;
+  void navigator.clipboard?.writeText(multiplayerRoom.code).then(() => multiplayerFeedback("Código copiado.")).catch(() => multiplayerFeedback(`Código: ${multiplayerRoom?.code ?? ""}`));
+});
+$("#leave-room-button").addEventListener("click", leaveMultiplayer);
+$("#ready-button").addEventListener("click", () => void multiplayerOperation(() => multiplayer.setReady(!multiplayerReady)));
+$("#start-multiplayer-button").addEventListener("click", async () => {
+  multiplayerFeedback("");
+  multiplayerStarting = true;
+  renderMultiplayerRoom();
+  try { await multiplayer.startRace(); }
+  catch (error) { multiplayerStarting = false; multiplayerFeedback(error instanceof Error ? error.message : "Não foi possível iniciar."); renderMultiplayerRoom(); }
+});
+document.querySelectorAll<HTMLButtonElement>("[data-multiplayer-character]").forEach(button => button.addEventListener("click", () => {
+  if (!multiplayerRoom) return;
+  const character = button.dataset.multiplayerCharacter as MultiplayerCharacterId;
+  void multiplayerOperation(() => multiplayer.updatePlayer(character, multiplayerProfile().name));
+}));
+document.querySelectorAll<HTMLButtonElement>("[data-multiplayer-course]").forEach(button => button.addEventListener("click", () => {
+  if (!multiplayerRoom) return;
+  void multiplayerOperation(() => multiplayer.setCourse(button.dataset.multiplayerCourse as MultiplayerCourseId));
+}));
+
+multiplayer.addEventListener("connection", () => {
+  const status = $("#multiplayer-connection");
+  status.textContent = multiplayer.connected ? "● SERVIDOR CONECTADO" : "○ SERVIDOR INDISPONÍVEL";
+  status.classList.toggle("connected", multiplayer.connected);
+});
+multiplayer.addEventListener("room", event => {
+  multiplayerRoom = (event as CustomEvent<MultiplayerRoom | null>).detail;
+  renderMultiplayerRoom();
+});
+multiplayer.addEventListener("race-start", event => beginMultiplayerRace((event as CustomEvent<RaceStart>).detail));
+multiplayer.addEventListener("racer-state", event => applyRemoteState((event as CustomEvent<RacerStatePacket>).detail));
+multiplayer.addEventListener("race-action", event => applyRemoteAction((event as CustomEvent<MultiplayerAction>).detail));
 installButton.addEventListener("click", async () => {
   ensureMenuMusic();
   if (installPrompt) {
@@ -961,8 +1238,9 @@ document.querySelectorAll<HTMLButtonElement>("[data-controls-tab]").forEach(butt
 $("#resume-button").addEventListener("click", resume);
 $("#quit-button").addEventListener("click", openCampaign);
 $("#restart-button").addEventListener("click", startRun);
-$("#result-title-button").addEventListener("click", () => showScreen("title"));
+$("#result-title-button").addEventListener("click", () => { if (multiplayerActive || multiplayerRoom) leaveMultiplayer(); showScreen("title"); });
 $("#next-track-button").addEventListener("click", () => {
+  if (multiplayerActive) { leaveMultiplayer(); openMultiplayer(); return; }
   if (selectedCourseIndex < COURSES.length - 1) { selectedCourseIndex += 1; startRun(); } else { selectedCourseIndex = 0; openCampaign(); }
 });
 
@@ -986,6 +1264,7 @@ window.addEventListener("keydown", event => {
     else if (screen === "settings") closeSettings();
     else if (screen === "controls") showScreen("settings");
     else if (screen === "character") openCampaign();
+    else if (screen === "multiplayer") { leaveMultiplayer(); showScreen("title"); }
     else if (screen === "campaign") showScreen("title");
   }
   if (event.key.toLowerCase() === "d" && event.altKey) view.setDebug(true);

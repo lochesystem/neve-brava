@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: neve-brava-multiplayer
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build:server
+    startCommand: node dist-server/server/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: CLIENT_URL
+        value: https://lochesystem.github.io
+      - key: NODE_VERSION
+        value: 24
+

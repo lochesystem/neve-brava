@@ -120,6 +120,7 @@
             </div>
             <div class="menu-actions">
               <button id="campaign-button" class="primary focusable"><span>✕</span> MODO CAMPANHA</button>
+              <button id="multiplayer-button" class="secondary multiplayer-title-button focusable"><span>◎</span> MULTIPLAYER</button>
               <button id="install-button" class="secondary install-button focusable hidden"><span>↓</span> INSTALAR JOGO</button>
               <button id="settings-button" class="secondary focusable">CONFIGURAÇÕES</button>
             </div>
@@ -127,6 +128,62 @@
             <p id="dev-hint" class="dev-hint">Para testes sem controle, abra com <code>?dev=1</code>.</p>
           </div>
         </div>
+      </section>
+
+      <section id="multiplayer-screen" class="screen multiplayer-screen hidden">
+        <header class="multiplayer-head">
+          <div><p class="eyebrow">CORRIDA ONLINE</p><h2>Multiplayer</h2><p>Encontre adversários ou convide amigos com um código.</p></div>
+          <button id="multiplayer-back-button" class="secondary focusable">← VOLTAR</button>
+        </header>
+
+        <div id="multiplayer-entry" class="multiplayer-entry">
+          <div class="multiplayer-profile">
+            <label for="multiplayer-name">SEU NOME</label>
+            <input id="multiplayer-name" class="focusable" maxlength="16" autocomplete="nickname" value="PILOTO" />
+          </div>
+          <div class="multiplayer-entry-actions">
+            <button id="quick-match-button" class="primary focusable"><span>⚡</span> PARTIDA RÁPIDA</button>
+            <button id="create-room-button" class="secondary focusable"><span>＋</span> CRIAR SALA</button>
+          </div>
+          <div class="multiplayer-join">
+            <label for="room-code-input">ENTRAR COM CÓDIGO</label>
+            <div><input id="room-code-input" class="focusable" maxlength="4" inputmode="text" autocomplete="off" placeholder="ABCD" /><button id="join-room-button" class="secondary focusable">ENTRAR</button></div>
+          </div>
+          <p class="multiplayer-note">Partidas usam de 2 a 4 jogadores. As vagas restantes são preenchidas pela IA.</p>
+        </div>
+
+        <div id="multiplayer-room" class="multiplayer-room hidden">
+          <div class="room-summary">
+            <span>SALA</span><strong id="multiplayer-room-code">----</strong><button id="copy-room-code-button" class="secondary focusable">COPIAR CÓDIGO</button>
+            <small id="multiplayer-room-status">AGUARDANDO PILOTOS</small>
+          </div>
+          <div class="multiplayer-columns">
+            <div class="multiplayer-players"><small>PILOTOS</small><ol id="multiplayer-player-list"></ol></div>
+            <div class="multiplayer-options">
+              <small>SEU PILOTO</small>
+              <div class="multiplayer-character-picker" aria-label="Escolha seu piloto">
+                <button class="focusable" data-multiplayer-character="guy"><img src="%BASE_URL%images/minimap/guy.png" alt="" /><span>GUY</span></button>
+                <button class="focusable selected" data-multiplayer-character="snowman"><img src="%BASE_URL%images/minimap/snowman.png" alt="" /><span>NEVINHO</span></button>
+                <button class="focusable" data-multiplayer-character="yeti"><img src="%BASE_URL%images/minimap/yeti.png" alt="" /><span>YETI</span></button>
+                <button class="focusable" data-multiplayer-character="giru"><img src="%BASE_URL%images/minimap/giru.png" alt="" /><span>GIRU</span></button>
+              </div>
+              <small>PISTA <i id="multiplayer-course-owner">· ANFITRIÃO ESCOLHE</i></small>
+              <div class="multiplayer-course-picker">
+                <button class="focusable selected" data-multiplayer-course="vale-bravo">01</button>
+                <button class="focusable" data-multiplayer-course="canion-cristal">02</button>
+                <button class="focusable" data-multiplayer-course="bosque-torto">03</button>
+                <button class="focusable" data-multiplayer-course="pico-tempestade">04</button>
+              </div>
+            </div>
+          </div>
+          <div class="multiplayer-room-actions">
+            <button id="leave-room-button" class="secondary focusable">SAIR DA SALA</button>
+            <button id="ready-button" class="primary focusable">✕ ESTOU PRONTO</button>
+            <button id="start-multiplayer-button" class="primary focusable hidden">✕ INICIAR CORRIDA</button>
+          </div>
+        </div>
+        <p id="multiplayer-feedback" class="multiplayer-feedback" aria-live="polite"></p>
+        <span id="multiplayer-connection" class="multiplayer-connection">CONECTANDO…</span>
       </section>
 
       <section id="campaign-screen" class="screen campaign-screen hidden">
