@@ -97,6 +97,8 @@ let screen: Screen = "title";
 let settingsReturn: Screen = "title";
 let selectedCourseIndex = 0;
 let selectedCharacter: CharacterId = "snowman";
+let characterSelectionActive = false;
+let hasChosenCharacter = false;
 let accumulator = 0;
 let previousTime = performance.now();
 let countdown = 3.35;
@@ -334,11 +336,21 @@ function createOpponent(character: CharacterId, startX: number): RivalState {
 
 function updateCharacterSelection(): void {
   const character = characterById(selectedCharacter);
-  $("#selected-character-name").textContent = character.name.toUpperCase();
-  $("#character-confirm-button").innerHTML = `<span>✕</span> CORRER COM ${character.name.toUpperCase()}`;
+  $("#selected-character-name").textContent = characterSelectionActive ? character.name.toUpperCase() : "—";
+  const confirmButton = $("#character-confirm-button") as HTMLButtonElement;
+  confirmButton.disabled = !characterSelectionActive;
+  confirmButton.innerHTML = characterSelectionActive
+    ? `<span>✕</span> CORRER COM ${character.name.toUpperCase()}`
+    : `<span>✕</span> ESCOLHA UM PILOTO`;
   document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button =>
-    button.classList.toggle("selected", button.dataset.character === selectedCharacter));
-  view.setCharacterSelection(selectedCharacter);
+    button.classList.toggle("selected", characterSelectionActive && button.dataset.character === selectedCharacter));
+  if (characterSelectionActive) view.setCharacterSelection(selectedCharacter);
+}
+
+function selectCharacter(character: CharacterId): void {
+  selectedCharacter = character;
+  characterSelectionActive = true;
+  updateCharacterSelection();
 }
 
 function openCharacterSelect(): void {
@@ -353,12 +365,15 @@ function openCharacterSelect(): void {
   view.setRacerCharacters(selectedCharacter, opponents[0], opponents[1], opponents[2]);
   view.setSelectionMode(true);
   $("#character-course").textContent = `${course.name} · ETAPA ${String(course.order).padStart(2, "0")}`;
+  characterSelectionActive = hasChosenCharacter;
   updateCharacterSelection();
   showScreen("character");
 }
 
 function startRun(): void {
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
+  if (!characterSelectionActive && !hasChosenCharacter) return;
+  hasChosenCharacter = true;
   requestMobileImmersiveMode();
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
@@ -755,11 +770,13 @@ function focusables(): HTMLElement[] {
 function focusFirst(): void {
   const items = focusables();
   document.querySelectorAll(".gamepad-focus").forEach(element => element.classList.remove("gamepad-focus"));
+  if (screen === "character") {
+    (document.activeElement as HTMLElement | null)?.blur();
+    return;
+  }
   const preferred = screen === "campaign"
     ? document.querySelector<HTMLElement>(`[data-track-index="${selectedCourseIndex}"]`)
-    : screen === "character"
-      ? document.querySelector<HTMLElement>(`[data-character="${selectedCharacter}"]`)
-      : screen === "results"
+    : screen === "results"
         ? $("#next-track-button")
         : screen === "controls"
           ? document.querySelector<HTMLElement>("[data-controls-tab].active")
@@ -771,11 +788,39 @@ function focusFirst(): void {
 }
 function navigateMenu(direction: MenuAction): void {
   const items = focusables(); if (!items.length) return;
-  const current = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
+  if (screen === "character" && !characterSelectionActive) {
+    const cards = items.filter(item => Boolean(item.dataset.character));
+    const target = direction === "left" || direction === "up" ? cards.at(-1) : cards[0];
+    if (!target) return;
+    items.forEach(item => item.classList.remove("gamepad-focus"));
+    target.focus({ preventScroll: false });
+    target.classList.add("gamepad-focus");
+    selectCharacter(target.dataset.character as CharacterId);
+    target.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  let current = items.indexOf(document.activeElement as HTMLElement);
+  if (current < 0 && screen === "character") {
+    const selectedCard = characterScreen.querySelector<HTMLElement>(`[data-character="${selectedCharacter}"]`);
+    current = selectedCard ? items.indexOf(selectedCard) : 0;
+  }
+  current = Math.max(0, current);
   const delta = direction === "up" || direction === "left" ? -1 : 1, next = (current + delta + items.length) % items.length;
   items.forEach(item => item.classList.remove("gamepad-focus"));
   items[next].focus({ preventScroll: false }); items[next].classList.add("gamepad-focus"); items[next].scrollIntoView({ block: "nearest" });
+  if (screen === "character" && items[next].dataset.character) selectCharacter(items[next].dataset.character as CharacterId);
 }
+
+menu.addEventListener("pointerover", event => {
+  if (!(event instanceof PointerEvent) || event.pointerType !== "mouse") return;
+  const target = (event.target as HTMLElement).closest<HTMLElement>(".focusable");
+  if (!target) return;
+  document.querySelectorAll(".gamepad-focus").forEach(element => element.classList.remove("gamepad-focus"));
+  const active = document.activeElement as HTMLElement | null;
+  if (active !== target) active?.blur();
+  if (screen === "character" && target.dataset.character) selectCharacter(target.dataset.character as CharacterId);
+});
+
 function ensureMenuMusic(): void {
   if (screen === "playing" || screen === "paused") return;
   audio.setMenuTrack();
@@ -902,8 +947,7 @@ startButton.addEventListener("click", openCharacterSelect);
 $("#character-back-button").addEventListener("click", openCampaign);
 $("#character-confirm-button").addEventListener("click", startRun);
 document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button => button.addEventListener("click", () => {
-  selectedCharacter = button.dataset.character as CharacterId;
-  updateCharacterSelection();
+  selectCharacter(button.dataset.character as CharacterId);
   startRun();
 }));
 $("#settings-button").addEventListener("click", openSettings);
