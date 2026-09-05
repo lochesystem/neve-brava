@@ -33,6 +33,7 @@ import type {
 type Screen = "title" | "campaign" | "character" | "multiplayer" | "playing" | "paused" | "results" | "settings" | "controls";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 type SnowballSpecial = { active: boolean; owner: CharacterId; s: number; x: number; lap: number; hit: Set<CharacterId> };
+type NetworkOpponentTarget = { state: NetworkRacerState; receivedAt: number };
 
 const query = new URLSearchParams(window.location.search);
 const playerSpecialTest = query.has("special-test");
@@ -122,6 +123,7 @@ let multiplayerStarting = false;
 const remoteSlotByPlayer = new Map<string, number>();
 const botSlotByActor = new Map<string, number>();
 const remoteSequenceByPlayer = new Map<string, number>();
+const networkOpponentTargets = new Map<number, NetworkOpponentTarget>();
 let accumulator = 0;
 let previousTime = performance.now();
 let countdown = 3.35;
@@ -384,6 +386,7 @@ function leaveMultiplayer(): void {
   remoteSlotByPlayer.clear();
   botSlotByActor.clear();
   remoteSequenceByPlayer.clear();
+  networkOpponentTargets.clear();
   renderMultiplayerRoom();
 }
 
@@ -471,6 +474,7 @@ function configureMultiplayerRacers(start: RaceStart): void {
   remoteSlotByPlayer.clear();
   botSlotByActor.clear();
   remoteSequenceByPlayer.clear();
+  networkOpponentTargets.clear();
   entries.forEach((entry, index) => {
     if (entry.playerId) remoteSlotByPlayer.set(entry.playerId, index);
     else botSlotByActor.set(entry.actorId, index);
@@ -666,7 +670,10 @@ function applyNetworkOpponentState(actorId: string, sequence: number, remote: Ne
   if (!multiplayerActive) return;
   const slot = remoteSlotByPlayer.get(actorId) ?? botSlotByActor.get(actorId);
   if (slot === undefined || sequence <= (remoteSequenceByPlayer.get(actorId) ?? -1)) return;
+  const firstPacket = !remoteSequenceByPlayer.has(actorId);
   remoteSequenceByPlayer.set(actorId, sequence);
+  networkOpponentTargets.set(slot, { state: { ...remote }, receivedAt: performance.now() });
+  if (!firstPacket) return;
   const current = opponents()[slot];
   if (!current) return;
   setOpponentAt(slot, {
@@ -679,6 +686,55 @@ function applyNetworkOpponentState(actorId: string, sequence: number, remote: Ne
     item: remote.item, credits: remote.credits, turboTime: remote.turboTime, specialTurboTime: remote.specialTurboTime,
     shieldTime: remote.shieldTime, slowTime: remote.slowTime, timeWarpTime: remote.timeWarpTime, freezeTime: remote.freezeTime,
   });
+}
+
+function blendAngle(from: number, to: number, amount: number): number {
+  return from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * amount;
+}
+
+function updateNetworkOpponents(step: number, now: number): void {
+  const amount = 1 - Math.exp(-14 * step);
+  for (const [slot, target] of networkOpponentTargets) {
+    const current = opponents()[slot];
+    if (!current) continue;
+    const remote = target.state;
+    const age = Math.min(.12, Math.max(0, (now - target.receivedAt) / 1_000));
+    const canPredict = !remote.finished && remote.liftTime <= 0 && remote.freezeTime <= 0;
+    const targetS = remote.s + (canPredict ? remote.speed * age : 0);
+    const targetX = remote.x + (canPredict ? remote.lateralSpeed * age : 0);
+    const snap = current.lap !== remote.lap || Math.abs(targetS - current.s) > 55
+      || (current.liftTime > 0) !== (remote.liftTime > 0);
+    const blend = snap ? 1 : amount;
+    setOpponentAt(slot, {
+      ...current,
+      s: current.s + (targetS - current.s) * blend,
+      x: current.x + (targetX - current.x) * blend,
+      y: current.y + (remote.y - current.y) * blend,
+      speed: current.speed + (remote.speed - current.speed) * blend,
+      lateralSpeed: current.lateralSpeed + (remote.lateralSpeed - current.lateralSpeed) * blend,
+      grounded: remote.grounded,
+      verticalSpeed: current.verticalSpeed + (remote.verticalSpeed - current.verticalSpeed) * blend,
+      carve: current.carve + (remote.carve - current.carve) * blend,
+      heading: blendAngle(current.heading, remote.heading, blend),
+      spin: blendAngle(current.spin, remote.spin, blend),
+      airTime: remote.grounded ? 0 : current.airTime + step,
+      stun: remote.recovering,
+      tumble: current.tumble + (remote.tumbleTime - current.tumble) * blend,
+      lap: remote.lap,
+      liftTime: remote.liftTime,
+      finished: remote.finished,
+      finishTime: remote.finished ? remote.elapsed : current.finishTime,
+      elapsed: remote.elapsed + age,
+      item: remote.item,
+      credits: remote.credits,
+      turboTime: remote.turboTime,
+      specialTurboTime: remote.specialTurboTime,
+      shieldTime: remote.shieldTime,
+      slowTime: remote.slowTime,
+      timeWarpTime: remote.timeWarpTime,
+      freezeTime: remote.freezeTime,
+    });
+  }
 }
 
 function applyRemoteState(packet: RacerStatePacket): void {
@@ -1152,7 +1208,8 @@ function frame(now: number): void {
         previousGuy = { ...guy };
         previousGiru = { ...giru };
         for (const event of updateRider(state, stepIntent, fixedStep, currentRacePosition())) handleEvent(event);
-        if (!multiplayerActive) {
+        if (multiplayerActive) updateNetworkOpponents(fixedStep, now);
+        else {
           for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep, racePositionOf(rival))) handleRivalEvent(event, rival);
           const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
           for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep, racePositionOf(guy))) handleRivalEvent(event, guy);

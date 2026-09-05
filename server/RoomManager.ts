@@ -185,6 +185,11 @@ export class RoomManager {
     const leaving = room.players.find(player => player.id === socketId);
     if (room.status === "countdown" || room.status === "racing") {
       if (leaving) leaving.connected = false;
+      if (leaving?.host) {
+        leaving.host = false;
+        const successor = room.players.find(player => player.id !== socketId && player.connected);
+        if (successor) successor.host = true;
+      }
       if (room.players.every(player => !player.connected || player.finishTime !== null)) room.status = "finished";
     } else {
       room.players = room.players.filter(player => player.id !== socketId);

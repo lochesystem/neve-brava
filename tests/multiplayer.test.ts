@@ -79,4 +79,19 @@ describe("salas multiplayer", () => {
     expect(restored?.players.find(player => player.id === "guest-session")?.ready).toBe(true);
     expect(rooms.start("host-session").room.status).toBe("countdown");
   });
+
+  it("transfere o anfitrião se ele abandonar uma corrida", () => {
+    const rooms = new RoomManager();
+    const created = rooms.create("host", { name: "Host", character: "snowman" }, "private");
+    rooms.join(created.code, "guest", { name: "Guest", character: "guy" });
+    rooms.setReady("host", true);
+    rooms.setReady("guest", true);
+    rooms.start("host");
+    rooms.markRacing(created.code);
+
+    const room = rooms.leave("host");
+    expect(room?.players.find(player => player.id === "host")?.host).toBe(false);
+    expect(room?.players.find(player => player.id === "guest")?.host).toBe(true);
+    expect(room?.status).toBe("racing");
+  });
 });
