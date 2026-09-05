@@ -76,6 +76,7 @@ npm run check
 - perfis Alta, Média e Performance;
 - simulação em passo fixo de 60 Hz e regras críticas headless.
 - salas multiplayer privadas por código e busca rápida, com escolha de piloto/pista, confirmação dos jogadores e largada sincronizada;
+- bots multiplayer autoritativos no servidor: cada sala executa uma única IA a 30 Hz e distribui os mesmos snapshots a todos os jogadores em 15 Hz;
 - sincronização online dos pilotos a 15 Hz e propagação de itens, especiais, quedas e chegada entre dois a quatro jogadores.
 
 ## Arquitetura
@@ -85,7 +86,7 @@ src/core   — pista, matemática, simulação e pontuação sem Three.js/DOM
 src/input  — Gamepad API, intents, rumble e áudio
 src/view   — Three.js, câmera, mundo, personagem e partículas
 src/multiplayer — cliente Socket.IO e adaptação da corrida local para rede
-server     — servidor de salas, matchmaking e retransmissão em tempo real
+server     — servidor de salas, matchmaking, simulação autoritativa dos bots e sincronização em tempo real
 shared     — contrato de rede compartilhado entre navegador e servidor
 src/main   — máquina de estados, único RAF, UI e composição
 tests      — regras puras e invariantes da pista

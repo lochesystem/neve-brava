@@ -18,7 +18,9 @@ import { AudioManager, type GiruVoiceCue, type GuyVoiceCue, type SnowmanVoiceCue
 import { GameView, type Quality } from "./view/GameView.ts";
 import { TrackPreview } from "./view/TrackPreview.ts";
 import { MultiplayerClient } from "./multiplayer/MultiplayerClient.ts";
+import { MULTIPLAYER_START_X } from "../shared/multiplayer.ts";
 import type {
+  BotStatePacket,
   MultiplayerAction,
   MultiplayerCharacterId,
   MultiplayerCourseId,
@@ -118,6 +120,7 @@ let multiplayerSendTimer = 0;
 let multiplayerReady = false;
 let multiplayerStarting = false;
 const remoteSlotByPlayer = new Map<string, number>();
+const botSlotByActor = new Map<string, number>();
 const remoteSequenceByPlayer = new Map<string, number>();
 let accumulator = 0;
 let previousTime = performance.now();
@@ -379,6 +382,7 @@ function leaveMultiplayer(): void {
   multiplayerReady = false;
   multiplayerStarting = false;
   remoteSlotByPlayer.clear();
+  botSlotByActor.clear();
   remoteSequenceByPlayer.clear();
   renderMultiplayerRoom();
 }
@@ -436,27 +440,38 @@ async function multiplayerOperation(operation: () => Promise<MultiplayerRoom>): 
   }
 }
 
-function configureMultiplayerRacers(room: MultiplayerRoom): void {
+function configureMultiplayerRacers(start: RaceStart): void {
+  const room = start.room;
   const self = room.players.find(player => player.id === multiplayer.playerId);
   if (!self) return;
   selectedCharacter = self.character as CharacterId;
   characterSelectionActive = true;
   hasChosenCharacter = true;
-  const remotePlayers = room.players.filter(player => player.id !== multiplayer.playerId);
-  const used = new Set(room.players.map(player => player.character));
-  const botCharacters = CHARACTERS.map(character => character.id).filter(character => !used.has(character));
   const entries = [
-    ...remotePlayers.map(player => ({ character: player.character as CharacterId, playerId: player.id })),
-    ...botCharacters.map(character => ({ character, playerId: null })),
+    ...room.players.flatMap((player, index) => player.id === multiplayer.playerId ? [] : [{
+      character: player.character as CharacterId,
+      actorId: player.id,
+      playerId: player.id,
+      startX: MULTIPLAYER_START_X[index],
+    }]),
+    ...start.bots.map(bot => ({
+      character: bot.character as CharacterId,
+      actorId: bot.actorId,
+      playerId: null,
+      startX: bot.startX,
+    })),
   ].slice(0, 3);
-  while (entries.length < 3) entries.push({ character: CHARACTERS.find(character => character.id !== selectedCharacter)!.id, playerId: null });
-  const starts = [-3.15, 3.1, 7.4];
-  const states = entries.map((entry, index) => createOpponent(entry.character, starts[index]));
+  const states = entries.map(entry => createOpponent(entry.character, entry.startX));
+  if (states.length !== 3) return;
   [rival, guy, giru] = states as [RivalState, RivalState, RivalState];
   previousRival = { ...rival }; previousGuy = { ...guy }; previousGiru = { ...giru };
   remoteSlotByPlayer.clear();
+  botSlotByActor.clear();
   remoteSequenceByPlayer.clear();
-  entries.forEach((entry, index) => { if (entry.playerId) remoteSlotByPlayer.set(entry.playerId, index); });
+  entries.forEach((entry, index) => {
+    if (entry.playerId) remoteSlotByPlayer.set(entry.playerId, index);
+    else botSlotByActor.set(entry.actorId, index);
+  });
   view.setRacerCharacters(selectedCharacter, rival.id, guy.id, giru.id);
   updateMapPortraits();
 }
@@ -472,7 +487,11 @@ function beginMultiplayerRace(start: RaceStart): void {
   multiplayerActive = true;
   multiplayerStarting = true;
   startRun();
-  configureMultiplayerRacers(start.room);
+  const playerIndex = start.room.players.findIndex(player => player.id === multiplayer.playerId);
+  state.x = MULTIPLAYER_START_X[playerIndex] ?? 0;
+  state.lastSafeX = state.x;
+  previousRider = { ...state };
+  configureMultiplayerRacers(start);
   countdown = Math.max(.35, (start.startsAt - Date.now()) / 1_000);
   multiplayerSequence = 0;
   multiplayerSendTimer = 0;
@@ -640,14 +659,13 @@ function networkStateOfPlayer(): NetworkRacerState {
   };
 }
 
-function applyRemoteState(packet: RacerStatePacket): void {
+function applyNetworkOpponentState(actorId: string, sequence: number, remote: NetworkRacerState): void {
   if (!multiplayerActive) return;
-  const slot = remoteSlotByPlayer.get(packet.playerId);
-  if (slot === undefined || packet.sequence <= (remoteSequenceByPlayer.get(packet.playerId) ?? -1)) return;
-  remoteSequenceByPlayer.set(packet.playerId, packet.sequence);
+  const slot = remoteSlotByPlayer.get(actorId) ?? botSlotByActor.get(actorId);
+  if (slot === undefined || sequence <= (remoteSequenceByPlayer.get(actorId) ?? -1)) return;
+  remoteSequenceByPlayer.set(actorId, sequence);
   const current = opponents()[slot];
   if (!current) return;
-  const remote = packet.state;
   setOpponentAt(slot, {
     ...current,
     s: remote.s, x: remote.x, y: remote.y, speed: remote.speed, lateralSpeed: remote.lateralSpeed,
@@ -660,24 +678,40 @@ function applyRemoteState(packet: RacerStatePacket): void {
   });
 }
 
-function remotePlayerIdFor(opponent: RivalState): string | undefined {
+function applyRemoteState(packet: RacerStatePacket): void {
+  applyNetworkOpponentState(packet.playerId, packet.sequence, packet.state);
+}
+
+function applyBotState(packet: BotStatePacket): void {
+  packet.bots.forEach(bot => applyNetworkOpponentState(bot.actorId, packet.sequence, bot.state));
+}
+
+function networkActorIdFor(opponent: RivalState): string | undefined {
   const slot = opponents().indexOf(opponent);
-  return [...remoteSlotByPlayer].find(([, candidateSlot]) => candidateSlot === slot)?.[0];
+  return [...remoteSlotByPlayer, ...botSlotByActor].find(([, candidateSlot]) => candidateSlot === slot)?.[0];
 }
 
 function applyRemoteAction(action: MultiplayerAction): void {
   if (!multiplayerActive || action.actorId === multiplayer.playerId) return;
-  const sourceSlot = remoteSlotByPlayer.get(action.actorId);
+  const sourceSlot = remoteSlotByPlayer.get(action.actorId) ?? botSlotByActor.get(action.actorId);
   const source = sourceSlot === undefined ? null : opponents()[sourceSlot];
   if (!source) return;
   if (action.type === "special") {
     useRivalSpecial(source);
     return;
   }
-  if (action.type === "wind" && action.targetId === multiplayer.playerId) {
-    const events = applyRiderWindHit(state);
-    view.windShot(source, state);
-    handleAppliedRiderEvents(events);
+  if (action.type === "wind") {
+    if (action.targetId === multiplayer.playerId) {
+      const events = applyRiderWindHit(state);
+      view.windShot(source, state);
+      handleAppliedRiderEvents(events);
+      return;
+    }
+    const targetSlot = action.targetId
+      ? remoteSlotByPlayer.get(action.targetId) ?? botSlotByActor.get(action.targetId)
+      : undefined;
+    const target = targetSlot === undefined ? null : opponents()[targetSlot];
+    if (target) view.windShot(source, target);
     return;
   }
   if (action.type === "blizzard") {
@@ -884,7 +918,7 @@ function handleEvent(event: GameEvent): void {
         playGiruVoice("attack");
         playYetiVoice("attack");
         playGuyVoice("attack");
-        const targetId = remotePlayerIdFor(target);
+        const targetId = networkActorIdFor(target);
         if (multiplayerActive && targetId) multiplayer.sendAction({ id: crypto.randomUUID(), type: "wind", targetId });
       }
     } else if (event.item === "blizzard") {
@@ -1115,11 +1149,13 @@ function frame(now: number): void {
         previousGuy = { ...guy };
         previousGiru = { ...giru };
         for (const event of updateRider(state, stepIntent, fixedStep, currentRacePosition())) handleEvent(event);
-        if (![...remoteSlotByPlayer.values()].includes(0)) for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep, racePositionOf(rival))) handleRivalEvent(event, rival);
-        const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
-        if (![...remoteSlotByPlayer.values()].includes(1)) for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep, racePositionOf(guy))) handleRivalEvent(event, guy);
-        const frontRunner = raceProgress(guy.lap, guy.s) > raceProgress(leader.lap, leader.s) ? guy : leader;
-        if (![...remoteSlotByPlayer.values()].includes(2)) for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep, racePositionOf(giru))) handleRivalEvent(event, giru);
+        if (!multiplayerActive) {
+          for (const event of updateRival(rival, raceProgress(state.lap, state.s), state.x, fixedStep, racePositionOf(rival))) handleRivalEvent(event, rival);
+          const leader = raceProgress(rival.lap, rival.s) > raceProgress(state.lap, state.s) ? rival : state;
+          for (const event of updateRival(guy, raceProgress(leader.lap, leader.s), leader.x, fixedStep, racePositionOf(guy))) handleRivalEvent(event, guy);
+          const frontRunner = raceProgress(guy.lap, guy.s) > raceProgress(leader.lap, leader.s) ? guy : leader;
+          for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep, racePositionOf(giru))) handleRivalEvent(event, giru);
+        }
         if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
         if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);
@@ -1207,6 +1243,7 @@ multiplayer.addEventListener("room", event => {
 });
 multiplayer.addEventListener("race-start", event => beginMultiplayerRace((event as CustomEvent<RaceStart>).detail));
 multiplayer.addEventListener("racer-state", event => applyRemoteState((event as CustomEvent<RacerStatePacket>).detail));
+multiplayer.addEventListener("bot-state", event => applyBotState((event as CustomEvent<BotStatePacket>).detail));
 multiplayer.addEventListener("race-action", event => applyRemoteAction((event as CustomEvent<MultiplayerAction>).detail));
 installButton.addEventListener("click", async () => {
   ensureMenuMusic();

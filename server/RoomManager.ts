@@ -1,12 +1,14 @@
 import {
   MULTIPLAYER_CHARACTERS,
   MULTIPLAYER_COURSES,
+  MULTIPLAYER_START_X,
   type MultiplayerCharacterId,
   type MultiplayerCourseId,
   type MultiplayerPlayer,
   type MultiplayerRoom,
   type PlayerProfile,
   type RoomMode,
+  type RaceStart,
 } from "../shared/multiplayer.js";
 
 type InternalRoom = MultiplayerRoom & { createdAt: number; updatedAt: number; startsAt: number | null };
@@ -118,12 +120,20 @@ export class RoomManager {
     return room;
   }
 
-  start(socketId: string): { room: MultiplayerRoom; startsAt: number; seed: number } {
+  start(socketId: string): RaceStart {
     const room = this.canStart(socketId);
     room.status = "countdown";
     room.startsAt = Date.now() + 3_500;
     room.updatedAt = Date.now();
-    return { room: this.publicRoom(room), startsAt: room.startsAt, seed: Math.floor(Math.random() * 2 ** 31) };
+    const occupied = new Set(room.players.map(player => player.character));
+    const bots = MULTIPLAYER_CHARACTERS
+      .filter(character => !occupied.has(character))
+      .map((character, index) => ({
+        actorId: `bot:${character}`,
+        character,
+        startX: MULTIPLAYER_START_X[room.players.length + index],
+      }));
+    return { room: this.publicRoom(room), startsAt: room.startsAt, seed: Math.floor(Math.random() * 2 ** 31), bots };
   }
 
   markRacing(code: string): void {
@@ -159,6 +169,7 @@ export class RoomManager {
     const leaving = room.players.find(player => player.id === socketId);
     if (room.status === "countdown" || room.status === "racing") {
       if (leaving) leaving.connected = false;
+      if (room.players.every(player => !player.connected || player.finishTime !== null)) room.status = "finished";
     } else {
       room.players = room.players.filter(player => player.id !== socketId);
       if (!room.players.length) {

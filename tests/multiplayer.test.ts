@@ -39,6 +39,10 @@ describe("salas multiplayer", () => {
     expect(start.room.courseId).toBe("bosque-torto");
     expect(start.room.status).toBe("countdown");
     expect(start.startsAt).toBeGreaterThan(Date.now());
+    expect(start.bots).toEqual([
+      { actorId: "bot:snowman", character: "snowman", startX: 2.5 },
+      { actorId: "bot:giru", character: "giru", startX: 7.4 },
+    ]);
   });
 
   it("coloca duas buscas rápidas na mesma sala", () => {

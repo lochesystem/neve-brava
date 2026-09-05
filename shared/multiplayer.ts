@@ -30,10 +30,19 @@ export type PlayerProfile = {
   character: MultiplayerCharacterId;
 };
 
+export const MULTIPLAYER_START_X = [-7.4, -2.5, 2.5, 7.4] as const;
+
+export type MultiplayerBot = {
+  actorId: string;
+  character: MultiplayerCharacterId;
+  startX: number;
+};
+
 export type RaceStart = {
   room: MultiplayerRoom;
   startsAt: number;
   seed: number;
+  bots: MultiplayerBot[];
 };
 
 export type NetworkRacerState = {
@@ -71,6 +80,11 @@ export type RacerStatePacket = {
   state: NetworkRacerState;
 };
 
+export type BotStatePacket = {
+  sequence: number;
+  bots: Array<MultiplayerBot & { state: NetworkRacerState }>;
+};
+
 export type MultiplayerAction = {
   id: string;
   actorId: string;
@@ -79,4 +93,3 @@ export type MultiplayerAction = {
 };
 
 export type ServerError = { message: string };
-

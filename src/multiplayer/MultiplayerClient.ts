@@ -1,5 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 import type {
+  BotStatePacket,
   MultiplayerAction,
   MultiplayerCharacterId,
   MultiplayerCourseId,
@@ -50,6 +51,7 @@ export class MultiplayerClient extends EventTarget {
       this.emit("race-start", start);
     });
     this.socket.on("racer-state", (packet: RacerStatePacket) => this.emit("racer-state", packet));
+    this.socket.on("bot-state", (packet: BotStatePacket) => this.emit("bot-state", packet));
     this.socket.on("race-action", (action: MultiplayerAction) => this.emit("race-action", action));
     this.socket.connect();
   }
@@ -127,4 +129,3 @@ export class MultiplayerClient extends EventTarget {
     this.dispatchEvent(new CustomEvent(name, { detail }));
   }
 }
-
