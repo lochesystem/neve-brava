@@ -14,6 +14,9 @@ const allowedOrigins = (process.env.CLIENT_URL ?? "http://127.0.0.1:5173,http://
   .split(",").map(value => value.trim()).filter(Boolean);
 const roomManager = new RoomManager();
 const botRaces = new BotRaceManager();
+const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const activeConnections = new Map<string, string>();
+const RECONNECT_GRACE_MS = 20_000;
 
 const httpServer = createServer((request, response) => {
   if (request.url === "/health") {
@@ -27,16 +30,20 @@ const httpServer = createServer((request, response) => {
 const io = new Server(httpServer, {
   cors: { origin: allowedOrigins, methods: ["GET", "POST"] },
   transports: ["websocket", "polling"],
+  connectionStateRecovery: { maxDisconnectionDuration: RECONNECT_GRACE_MS, skipMiddlewares: true },
 });
+
+function playerIdFor(socket: Socket): string {
+  const sessionId = socket.handshake.auth.sessionId;
+  return typeof sessionId === "string" && /^[a-zA-Z0-9-]{8,64}$/.test(sessionId) ? sessionId : socket.id;
+}
 
 function replyError(callback: ((result: unknown) => void) | undefined, error: unknown): void {
   callback?.({ success: false, error: error instanceof Error ? error.message : "Não foi possível concluir a operação." });
 }
 
 function emitRoom(code: string): void {
-  const sockets = io.sockets.adapter.rooms.get(code);
-  const firstSocket = sockets?.values().next().value as string | undefined;
-  const room = firstSocket ? roomManager.roomFor(firstSocket) : null;
+  const room = roomManager.room(code);
   if (room) io.to(code).emit("room-update", room);
 }
 
@@ -47,35 +54,49 @@ function launchRace(start: RaceStart): void {
 }
 
 io.on("connection", (socket: Socket) => {
+  const playerId = playerIdFor(socket);
+  const reconnectTimer = reconnectTimers.get(playerId);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimers.delete(playerId);
+  const previousSocketId = activeConnections.get(playerId);
+  activeConnections.set(playerId, socket.id);
+  if (previousSocketId && previousSocketId !== socket.id) io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+  const restoredRoom = roomManager.setConnected(playerId, true);
+  if (restoredRoom) {
+    socket.join(restoredRoom.code);
+    socket.emit("room-update", restoredRoom);
+    emitRoom(restoredRoom.code);
+  }
+
   socket.on("create-room", (profile: PlayerProfile, callback?: (result: unknown) => void) => {
     try {
-      const room = roomManager.create(socket.id, profile, "private");
+      const room = roomManager.create(playerId, profile, "private");
       socket.join(room.code);
-      callback?.({ success: true, room, playerId: socket.id });
+      callback?.({ success: true, room, playerId });
     } catch (error) { replyError(callback, error); }
   });
 
   socket.on("quick-match", (profile: PlayerProfile, callback?: (result: unknown) => void) => {
     try {
-      const room = roomManager.quickMatch(socket.id, profile);
+      const room = roomManager.quickMatch(playerId, profile);
       socket.join(room.code);
-      callback?.({ success: true, room, playerId: socket.id });
+      callback?.({ success: true, room, playerId });
       emitRoom(room.code);
     } catch (error) { replyError(callback, error); }
   });
 
   socket.on("join-room", (rawCode: string, profile: PlayerProfile, callback?: (result: unknown) => void) => {
     try {
-      const room = roomManager.join(rawCode, socket.id, profile);
+      const room = roomManager.join(rawCode, playerId, profile);
       socket.join(room.code);
-      callback?.({ success: true, room, playerId: socket.id });
+      callback?.({ success: true, room, playerId });
       emitRoom(room.code);
     } catch (error) { replyError(callback, error); }
   });
 
   socket.on("update-player", (profile: Partial<PlayerProfile>, callback?: (result: unknown) => void) => {
     try {
-      const room = roomManager.updatePlayer(socket.id, profile);
+      const room = roomManager.updatePlayer(playerId, profile);
       callback?.({ success: true, room });
       emitRoom(room.code);
     } catch (error) { replyError(callback, error); }
@@ -83,7 +104,7 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("set-course", (courseId: string, callback?: (result: unknown) => void) => {
     try {
-      const room = roomManager.setCourse(socket.id, courseId);
+      const room = roomManager.setCourse(playerId, courseId);
       callback?.({ success: true, room });
       emitRoom(room.code);
     } catch (error) { replyError(callback, error); }
@@ -91,10 +112,10 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("set-ready", (ready: boolean, callback?: (result: unknown) => void) => {
     try {
-      const room = roomManager.setReady(socket.id, Boolean(ready));
+      const room = roomManager.setReady(playerId, Boolean(ready));
       callback?.({ success: true, room });
       emitRoom(room.code);
-      if (room.mode === "quick" && room.players.length >= 2 && room.players.every(player => player.ready)) {
+      if (room.mode === "quick" && room.players.length >= 2 && room.players.every(player => player.ready && player.connected)) {
         const host = room.players.find(player => player.host);
         if (host) {
           const start = roomManager.start(host.id);
@@ -106,46 +127,57 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("start-race", (callback?: (result: unknown) => void) => {
     try {
-      const start = roomManager.start(socket.id);
+      const start = roomManager.start(playerId);
       callback?.({ success: true });
       launchRace(start);
     } catch (error) { replyError(callback, error); }
   });
 
   socket.on("racer-state", (packet: Omit<RacerStatePacket, "playerId">) => {
-    const room = roomManager.roomFor(socket.id);
+    const room = roomManager.roomFor(playerId);
     if (!room || (room.status !== "countdown" && room.status !== "racing")) return;
-    botRaces.updateHuman(room.code, socket.id, packet.state);
-    socket.to(room.code).volatile.emit("racer-state", { ...packet, playerId: socket.id } satisfies RacerStatePacket);
+    botRaces.updateHuman(room.code, playerId, packet.state);
+    socket.to(room.code).volatile.emit("racer-state", { ...packet, playerId } satisfies RacerStatePacket);
   });
 
   socket.on("race-action", (action: Omit<MultiplayerAction, "actorId">) => {
-    const room = roomManager.roomFor(socket.id);
+    const room = roomManager.roomFor(playerId);
     if (!room || room.status !== "racing") return;
-    botRaces.handleHumanAction(room.code, socket.id, action);
-    socket.to(room.code).emit("race-action", { ...action, actorId: socket.id } satisfies MultiplayerAction);
+    botRaces.handleHumanAction(room.code, playerId, action);
+    socket.to(room.code).emit("race-action", { ...action, actorId: playerId } satisfies MultiplayerAction);
   });
 
   socket.on("race-finish", (finishTime: number) => {
     try {
-      const room = roomManager.finish(socket.id, finishTime);
+      const room = roomManager.finish(playerId, finishTime);
       io.to(room.code).emit("room-update", room);
       if (room.status === "finished") botRaces.stop(room.code);
     } catch { /* pacote tardio depois de sair da sala */ }
   });
 
   socket.on("leave-room", () => {
-    const code = roomManager.codeFor(socket.id);
-    const room = roomManager.leave(socket.id);
+    const code = roomManager.codeFor(playerId);
+    const room = roomManager.leave(playerId);
     if (code) socket.leave(code);
     if (room) emitRoom(room.code);
     if (room?.status === "finished") botRaces.stop(room.code);
   });
 
   socket.on("disconnect", () => {
-    const room = roomManager.leave(socket.id);
-    if (room) emitRoom(room.code);
-    if (room?.status === "finished") botRaces.stop(room.code);
+    if (activeConnections.get(playerId) !== socket.id) return;
+    activeConnections.delete(playerId);
+    const disconnectedRoom = roomManager.setConnected(playerId, false);
+    if (!disconnectedRoom) return;
+    emitRoom(disconnectedRoom.code);
+    const timer = setTimeout(() => {
+      reconnectTimers.delete(playerId);
+      if (activeConnections.has(playerId)) return;
+      const room = roomManager.leave(playerId);
+      if (room) emitRoom(room.code);
+      if (room?.status === "finished") botRaces.stop(room.code);
+    }, RECONNECT_GRACE_MS);
+    timer.unref();
+    reconnectTimers.set(playerId, timer);
   });
 });
 

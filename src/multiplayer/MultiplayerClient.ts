@@ -13,7 +13,22 @@ import type {
 
 type OperationResult = { success: boolean; error?: string; room?: MultiplayerRoom; playerId?: string };
 
+const SESSION_KEY = "snow-rush-multiplayer-session";
+
+function multiplayerSessionId(): string {
+  try {
+    const stored = sessionStorage.getItem(SESSION_KEY);
+    if (stored) return stored;
+    const created = crypto.randomUUID();
+    sessionStorage.setItem(SESSION_KEY, created);
+    return created;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
 export class MultiplayerClient extends EventTarget {
+  private readonly sessionId = multiplayerSessionId();
   private socket: Socket | null = null;
   room: MultiplayerRoom | null = null;
   playerId: string | null = null;
@@ -28,10 +43,15 @@ export class MultiplayerClient extends EventTarget {
 
   connect(): void {
     if (this.socket) return;
-    this.socket = io(this.serverUrl, { autoConnect: false, timeout: 7_000, transports: ["websocket", "polling"] });
+    this.socket = io(this.serverUrl, {
+      autoConnect: false,
+      timeout: 7_000,
+      transports: ["websocket", "polling"],
+      auth: { sessionId: this.sessionId },
+    });
     this.socket.on("connect", () => {
       this.connected = true;
-      this.playerId = this.socket?.id ?? null;
+      this.playerId = this.sessionId;
       this.emit("connection");
     });
     this.socket.on("disconnect", () => {

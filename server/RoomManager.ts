@@ -116,6 +116,7 @@ export class RoomManager {
     const player = this.requirePlayer(room, socketId);
     if (!player.host) throw new Error("Somente o anfitrião pode iniciar.");
     if (room.players.length < 2) throw new Error("A sala precisa de pelo menos dois jogadores.");
+    if (!room.players.every(candidate => candidate.connected)) throw new Error("Todos precisam estar conectados para iniciar.");
     if (!room.players.every(candidate => candidate.ready)) throw new Error("Todos precisam confirmar que estão prontos.");
     return room;
   }
@@ -154,6 +155,21 @@ export class RoomManager {
     const code = this.socketRooms.get(socketId);
     const room = code ? this.rooms.get(code) : null;
     return room ? this.publicRoom(room) : null;
+  }
+
+  room(code: string): MultiplayerRoom | null {
+    const room = this.rooms.get(code);
+    return room ? this.publicRoom(room) : null;
+  }
+
+  setConnected(socketId: string, connected: boolean): MultiplayerRoom | null {
+    const code = this.socketRooms.get(socketId);
+    const room = code ? this.rooms.get(code) : null;
+    const player = room?.players.find(candidate => candidate.id === socketId);
+    if (!room || !player) return null;
+    player.connected = connected;
+    room.updatedAt = Date.now();
+    return this.publicRoom(room);
   }
 
   codeFor(socketId: string): string | null {

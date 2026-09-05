@@ -63,4 +63,20 @@ describe("salas multiplayer", () => {
     const room = rooms.leave("host");
     expect(room?.players).toEqual([expect.objectContaining({ id: "guest", host: true })]);
   });
+
+  it("preserva a vaga durante uma queda curta e bloqueia a largada até reconectar", () => {
+    const rooms = new RoomManager();
+    const created = rooms.create("host-session", { name: "Host", character: "snowman" }, "private");
+    rooms.join(created.code, "guest-session", { name: "Guest", character: "guy" });
+    rooms.setReady("host-session", true);
+    rooms.setReady("guest-session", true);
+
+    const disconnected = rooms.setConnected("guest-session", false);
+    expect(disconnected?.players.find(player => player.id === "guest-session")?.connected).toBe(false);
+    expect(() => rooms.start("host-session")).toThrow("conectados");
+
+    const restored = rooms.setConnected("guest-session", true);
+    expect(restored?.players.find(player => player.id === "guest-session")?.ready).toBe(true);
+    expect(rooms.start("host-session").room.status).toBe("countdown");
+  });
 });

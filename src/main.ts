@@ -389,10 +389,10 @@ function leaveMultiplayer(): void {
 
 function multiplayerPlayerList(room: MultiplayerRoom): string {
   return room.players.map(player => `
-    <li class="${player.ready ? "ready" : ""}">
+    <li class="${player.ready ? "ready" : ""} ${player.connected ? "" : "disconnected"}">
       <img src="${import.meta.env.BASE_URL}images/minimap/${player.character}.png" alt="" />
       <span><b>${player.name}${player.id === multiplayer.playerId ? " · VOCÊ" : ""}</b><small>${characterById(player.character as CharacterId).name}${player.host ? " · ANFITRIÃO" : ""}</small></span>
-      <em>${player.ready ? "PRONTO" : "AJUSTANDO"}</em>
+      <em>${player.connected ? player.ready ? "PRONTO" : "AJUSTANDO" : "RECONECTANDO…"}</em>
     </li>`).join("");
 }
 
@@ -405,7 +405,9 @@ function renderMultiplayerRoom(): void {
   const isHost = Boolean(self?.host);
   multiplayerReady = Boolean(self?.ready);
   $("#multiplayer-room-code").textContent = room.code;
-  $("#multiplayer-room-status").textContent = room.players.length < 2
+  $("#multiplayer-room-status").textContent = room.players.some(player => !player.connected)
+    ? "AGUARDANDO RECONECTAR…"
+    : room.players.length < 2
     ? room.mode === "quick" ? "BUSCANDO ADVERSÁRIO…" : "AGUARDANDO PILOTOS"
     : `${room.players.length}/4 PILOTOS NA SALA`;
   $("#multiplayer-player-list").innerHTML = multiplayerPlayerList(room);
@@ -427,7 +429,8 @@ function renderMultiplayerRoom(): void {
   readyButton.classList.toggle("primary", !multiplayerReady);
   const startButton = $("#start-multiplayer-button") as HTMLButtonElement;
   startButton.classList.toggle("hidden", !isHost || room.mode === "quick");
-  startButton.disabled = multiplayerStarting || room.players.length < 2 || !room.players.every(player => player.ready);
+  startButton.disabled = multiplayerStarting || room.players.length < 2
+    || !room.players.every(player => player.ready && player.connected);
 }
 
 async function multiplayerOperation(operation: () => Promise<MultiplayerRoom>): Promise<void> {
