@@ -5,8 +5,9 @@ import { createSnowmanGrabRig, bindSnowmanGrabPose } from "../src/view/snowmanGr
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { createYetiGrabRig } from "../src/experiments/yetiGrabRig.ts";
 import { createGiruGrabRig } from "../src/experiments/giruGrabRig.ts";
+import { createGuyGrabRig } from "../src/experiments/guyGrabRig.ts";
 
-it.each(["snow-main", "yeti", "giru"])("preserves %s at rest and creates normalized finite skinning weights", character => {
+it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creates normalized finite skinning weights", character => {
   const bytes = readFileSync(new URL(`../public/models/${character}.glb`, import.meta.url));
   const jsonLength = bytes.readUInt32LE(12);
   const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
@@ -21,7 +22,7 @@ it.each(["snow-main", "yeti", "giru"])("preserves %s at rest and creates normali
   geometry.setAttribute("position", attribute(primitive.attributes.POSITION, 3));
   geometry.setIndex(attribute(primitive.indices, 1));
   const original = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
-  const rig = character === "giru" ? createGiruGrabRig(original) : character === "yeti" ? createYetiGrabRig(original) : createSnowmanGrabRig(original);
+  const rig = character === "guy-v2" ? createGuyGrabRig(original) : character === "giru" ? createGiruGrabRig(original) : character === "yeti" ? createYetiGrabRig(original) : createSnowmanGrabRig(original);
   const positions = geometry.getAttribute("position");
   const weights = rig.mesh.geometry.getAttribute("skinWeight");
   rig.applyPose(0); rig.mesh.updateMatrixWorld(true); rig.mesh.skeleton.update();

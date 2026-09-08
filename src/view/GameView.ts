@@ -819,7 +819,7 @@ export class GameView {
 
   private loadGuyModel(): void {
     new GLTFLoader().load(
-      `${import.meta.env.BASE_URL}models/guy-main.glb`,
+      `${import.meta.env.BASE_URL}models/guy-v2.glb`,
       gltf => {
         const model = gltf.scene;
         const bounds = new THREE.Box3().setFromObject(model);
