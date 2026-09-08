@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 const smooth = (a: number, b: number, v: number) => THREE.MathUtils.smoothstep(v, a, b);
 
-/** Experimental spatial weights, deliberately isolated from the production character. */
+/** Island-based weights for the approved Snowman grab; preserves the source geometry. */
 export function createSnowmanGrabRig(source: THREE.Mesh) {
   const geometry = source.geometry.clone();
   source.updateWorldMatrix(true, false);
@@ -52,8 +52,17 @@ export function createSnowmanGrabRig(source: THREE.Mesh) {
   mesh.name = "Nevinho-grab-experimental";
   mesh.add(root);
   mesh.bind(new THREE.Skeleton(bones));
-  // The pose leaves the rest bounds; a single lab character needs no per-frame bound rebuild.
+  // The pose leaves the rest bounds; avoid a CPU skinning pass to rebuild them each frame.
   mesh.frustumCulled = false;
+  return { mesh, applyPose: bindSnowmanGrabPose(mesh), bones };
+}
+
+/** Bind to each instance's own skeleton, never the shared template. */
+export function bindSnowmanGrabPose(mesh: THREE.Object3D) {
+  const board = mesh.getObjectByName("board-and-boots")!;
+  const body = mesh.getObjectByName("body")!;
+  const left = mesh.getObjectByName("left-arm")!;
+  const right = mesh.getObjectByName("right-arm")!;
   const applyPose = (amount: number) => {
     const t = smooth(0, 1, amount);
     board.position.set(0, .09 + .11 * t, .13 * t);
@@ -63,5 +72,5 @@ export function createSnowmanGrabRig(source: THREE.Mesh) {
     left.rotation.set(-.65 * t, 0, .52 * t);
     right.rotation.set(-.65 * t, 0, -.52 * t);
   };
-  return { mesh, applyPose, bones };
+  return applyPose;
 }

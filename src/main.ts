@@ -117,6 +117,7 @@ let hasChosenCharacter = false;
 let multiplayerRoom: MultiplayerRoom | null = null;
 let multiplayerActive = false;
 let multiplayerSequence = 0;
+let playerGrabHeld = false;
 let multiplayerSendTimer = 0;
 let multiplayerReady = false;
 let multiplayerStarting = false;
@@ -659,6 +660,7 @@ function setOpponentAt(index: number, next: RivalState): void {
 
 function networkStateOfPlayer(): NetworkRacerState {
   return {
+    grabHeld: playerGrabHeld,
     s: state.s, x: state.x, y: state.y, speed: state.speed, lateralSpeed: state.lateralSpeed,
     grounded: state.grounded, verticalSpeed: state.verticalSpeed, carve: state.carve, heading: state.heading,
     spin: state.spin, flip: state.flip, recovering: state.recovering, tumbleTime: state.tumbleTime,
@@ -681,6 +683,7 @@ function applyNetworkOpponentState(actorId: string, sequence: number, remote: Ne
   if (!current) return;
   setOpponentAt(slot, {
     ...current,
+    grabHeld: remote.grabHeld === true,
     s: remote.s, x: remote.x, y: remote.y, speed: remote.speed, lateralSpeed: remote.lateralSpeed,
     grounded: remote.grounded, verticalSpeed: remote.verticalSpeed, carve: remote.carve, heading: remote.heading,
     spin: remote.spin, airTime: remote.grounded ? 0 : current.airTime + 1 / 15,
@@ -716,6 +719,7 @@ function updateNetworkOpponents(step: number, now: number): void {
       speed: current.speed + (remote.speed - current.speed) * blend,
       lateralSpeed: current.lateralSpeed + (remote.lateralSpeed - current.lateralSpeed) * blend,
       grounded: remote.grounded,
+      grabHeld: remote.grabHeld === true,
       verticalSpeed: current.verticalSpeed + (remote.verticalSpeed - current.verticalSpeed) * blend,
       carve: current.carve + (remote.carve - current.carve) * blend,
       heading: blendAngle(current.heading, remote.heading, blend),
@@ -1190,6 +1194,7 @@ function showControlsPanel(panel: "dualsense" | "keyboard"): void {
 function frame(now: number): void {
   const dt = Math.min(.1, Math.max(0, (now - previousTime) / 1_000)); previousTime = now;
   const intent = input.poll(); lastIntentLook = intent.look; updateControllerStatus();
+  playerGrabHeld = intent.grabHeld;
   if (screen === "playing") {
     if (input.consumeMenu("pause")) pause();
     if (countdown > 0) {
@@ -1271,7 +1276,7 @@ function frame(now: number): void {
   const renderRival = screen === "playing" && countdown <= 0 ? interpolateRival(previousRival, rival, accumulator / fixedStep) : rival;
   const renderGuy = screen === "playing" && countdown <= 0 ? interpolateRival(previousGuy, guy, accumulator / fixedStep) : guy;
   const renderGiru = screen === "playing" && countdown <= 0 ? interpolateRival(previousGiru, giru, accumulator / fixedStep) : giru;
-  view.render(renderState, renderRival, renderGuy, renderGiru, state.item === "wind" ? findWindTarget()?.opponent.id ?? null : null, lastIntentLook, dt, snowballSpecial); requestAnimationFrame(frame);
+  view.render(renderState, renderRival, renderGuy, renderGiru, state.item === "wind" ? findWindTarget()?.opponent.id ?? null : null, lastIntentLook, dt, snowballSpecial, intent.grabHeld); requestAnimationFrame(frame);
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);

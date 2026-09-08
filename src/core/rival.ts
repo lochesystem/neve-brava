@@ -46,6 +46,7 @@ export type RivalState = {
   speed: number;
   lateralSpeed: number;
   targetX: number;
+  grabHeld?: boolean;
   decisionTimer: number;
   grounded: boolean;
   verticalSpeed: number;

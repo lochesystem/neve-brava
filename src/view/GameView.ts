@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
+import { createSnowmanGrabRig, bindSnowmanGrabPose } from "./snowmanGrabRig.ts";
 import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
@@ -649,6 +651,9 @@ export class GameView {
   private finishGateSlot: THREE.Group | null = null;
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
+  private playerGrabPose: ((amount: number) => void) | null = null;
+  private playerGrabAmount = 0;
+  private remoteGrabPoses = new WeakMap<THREE.Group, { apply: (amount: number) => void; amount: number }>();
   private performanceOverlay = new PerformanceOverlay();
   private particlePool: Particle[] = [];
   private particleGeometry = new THREE.TetrahedronGeometry(1);
@@ -755,7 +760,11 @@ export class GameView {
     new GLTFLoader().load(
       `${import.meta.env.BASE_URL}models/snow-main.glb`,
       gltf => {
-        const model = gltf.scene;
+        const model = new THREE.Group();
+        let source: THREE.Mesh | undefined;
+        gltf.scene.traverse(object => { if (object instanceof THREE.Mesh) source = object; });
+        if (source) model.add(createSnowmanGrabRig(source).mesh);
+        else model.add(gltf.scene);
         const bounds = new THREE.Box3().setFromObject(model);
         const center = bounds.getCenter(new THREE.Vector3());
         const height = Math.max(0.001, bounds.max.y - bounds.min.y);
@@ -1177,6 +1186,8 @@ export class GameView {
   }
 
   private refreshCharacterModels(): void {
+    this.playerGrabPose = null;
+    this.playerGrabAmount = 0;
     const slots: Array<{ visual: THREE.Group; id: CharacterId; player: boolean }> = [
       { visual: this.riderVisual, id: this.racerCharacters.player, player: true },
       { visual: this.rivalVisual, id: this.racerCharacters.first, player: false },
@@ -1184,10 +1195,18 @@ export class GameView {
       { visual: this.giruVisual, id: this.racerCharacters.third, player: false },
     ];
     for (const slot of slots) {
+      this.remoteGrabPoses.delete(slot.visual);
       const template = this.characterModels.get(slot.id);
       if (!template) continue;
-      const instance = template.clone(true);
+      const instance = slot.id === "snowman" ? cloneSkeleton(template) : template.clone(true);
+      if (slot.player && slot.id === "snowman" && instance.getObjectByName("board-and-boots")) {
+        this.playerGrabPose = bindSnowmanGrabPose(instance);
+      }
+      if (!slot.player && slot.id === "snowman" && instance.getObjectByName("board-and-boots")) {
+        this.remoteGrabPoses.set(slot.visual, { apply: bindSnowmanGrabPose(instance), amount: 0 });
+      }
       if (slot.player) instance.position.y = PLAYER_MODEL_Y_OFFSET[slot.id];
+      slot.visual.traverse(object => { if (object instanceof THREE.SkinnedMesh) object.skeleton.dispose(); });
       slot.visual.clear();
       slot.visual.scale.setScalar(1);
       slot.visual.add(instance);
@@ -1248,7 +1267,10 @@ export class GameView {
     this.updateCamera(state, 10);
   }
 
-  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, windTargetId: CharacterId | null, look: number, dt: number, snowball: { active: boolean; s: number; x: number }): void {
+  render(state: RiderState, rivalState: RivalState, guyState: RivalState, giruState: RivalState, windTargetId: CharacterId | null, look: number, dt: number, snowball: { active: boolean; s: number; x: number }, grabHeld = false): void {
+    const grabTarget = grabHeld && !state.grounded && state.recovering <= 0 && state.liftTime <= 0 ? 1 : 0;
+    this.playerGrabAmount = THREE.MathUtils.damp(this.playerGrabAmount, grabTarget, grabTarget ? 12 : 22, dt);
+    this.playerGrabPose?.(this.playerGrabAmount);
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
@@ -1594,6 +1616,12 @@ export class GameView {
       state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : -state.carve * .27 + Math.sin(state.windHit * 18) * state.windHit * .42,
     );
     const pump = moving && state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
+    const grab = this.remoteGrabPoses.get(visual);
+    if (grab) {
+      const target = state.grabHeld && !state.grounded && state.stun <= 0 && state.liftTime <= 0 ? 1 : 0;
+      grab.amount = THREE.MathUtils.damp(grab.amount, target, target ? 12 : 22, dt);
+      grab.apply(grab.amount);
+    }
     visual.position.y = -pump;
     visual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
     const slowAura = group.userData.slowAura as THREE.Group;

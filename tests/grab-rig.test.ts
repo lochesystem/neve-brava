@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import * as THREE from "three";
-import { createSnowmanGrabRig } from "../src/experiments/snowmanGrabRig.ts";
+import { createSnowmanGrabRig, bindSnowmanGrabPose } from "../src/view/snowmanGrabRig.ts";
+import { clone } from "three/addons/utils/SkeletonUtils.js";
 
 it("preserves the real snowman at rest and creates normalized finite skinning weights", () => {
   const bytes = readFileSync(new URL("../public/models/snow-main.glb", import.meta.url));
@@ -32,4 +33,9 @@ it("preserves the real snowman at rest and creates normalized finite skinning we
     expect(rig.mesh.getVertexPosition(i, new THREE.Vector3()).toArray().every(Number.isFinite)).toBe(true);
   }
   expect(original.geometry.getAttribute("skinWeight")).toBeUndefined();
+  const copy = clone(rig.mesh) as THREE.SkinnedMesh;
+  bindSnowmanGrabPose(copy)(0);
+  expect(copy.skeleton).not.toBe(rig.mesh.skeleton);
+  expect(copy.getObjectByName("body")!.position.y).toBeCloseTo(.4);
+  expect(rig.mesh.getObjectByName("body")!.position.y).toBeCloseTo(.28);
 });

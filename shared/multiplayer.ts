@@ -46,6 +46,7 @@ export type RaceStart = {
 };
 
 export type NetworkRacerState = {
+  grabHeld?: boolean;
   s: number;
   x: number;
   y: number;

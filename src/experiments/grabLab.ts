@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { createSnowmanGrabRig } from "./snowmanGrabRig.ts";
+import { createSnowmanGrabRig } from "../view/snowmanGrabRig.ts";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 
 document.body.innerHTML = `<style>body{margin:0;background:#d9eaf0;color:#203047;font:16px system-ui}canvas{display:block;width:100vw;height:100dvh}aside{position:fixed;top:16px;left:16px;width:280px;background:#fff8e9ee;border:2px solid #203047;border-radius:16px;padding:16px;box-sizing:border-box}h1{font-size:20px;margin:0 0 8px}p{font-size:13px}label{display:block;margin:12px 0}input[type=range]{width:100%}button{padding:10px;border:1px solid #203047;border-radius:8px;background:#ffd355;cursor:pointer}small{display:block;margin-top:12px}</style><canvas></canvas><aside><h1>Nevinho · Grab experimental</h1><p>Cópia independente. O personagem do jogo não foi alterado.</p><label>Pose <input id="pose" type="range" min="0" max="1" value="0" step=".01"></label><button id="play">Animar</button><label><input id="bones" type="checkbox"> Mostrar esqueleto</label><small>Arraste para girar a câmera. Scroll para aproximar.</small><p id="status">Carregando modelo…</p></aside>`;
