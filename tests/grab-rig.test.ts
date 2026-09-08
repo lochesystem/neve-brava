@@ -37,6 +37,15 @@ it.each(["snow-main", "yeti", "giru"])("preserves %s at rest and creates normali
   expect(original.geometry.getAttribute("skinWeight")).toBeUndefined();
   if (character === "giru") {
     const hairRig = rig as ReturnType<typeof createGiruGrabRig>;
+    const skinIndices = rig.mesh.geometry.getAttribute("skinIndex");
+    let freeTips = 0;
+    for (let i = 0; i < positions.count; i++) {
+      if (positions.getX(i) > -.275 || positions.getY(i) < .61) continue;
+      expect(skinIndices.getX(i)).toBe(1);
+      expect(weights.getX(i)).toBeCloseTo(0);
+      freeTips++;
+    }
+    expect(freeTips).toBeGreaterThan(20);
     for (let i = 0; i < 300; i++) hairRig.updateHair(i === 0 ? 100 : 1 / 60, 1, 1, Math.sin(i));
     const hair = hairRig.bones.slice(5);
     expect(hair.some(bone => Math.abs(bone.rotation.y) > .01)).toBe(true);

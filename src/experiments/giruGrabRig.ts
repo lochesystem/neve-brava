@@ -72,7 +72,11 @@ export function createGiruGrabRig(source: THREE.Mesh) {
   // helmet and low shoulder armour; only the projecting ponytail can swing.
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const hair = smooth(-x, .16, .245) * smooth(y, .60, .70) * (1 - smooth(z, .015, .08));
+    // Only the attachment needs the depth gate. Applying it to the entire
+    // ponytail pinned forward-curled tips to the torso while neighbours moved.
+    const distal = smooth(-x, .205, .275);
+    const attachment = smooth(-x, .16, .245) * smooth(y, .60, .70) * (1 - smooth(z, .015, .08));
+    const hair = Math.max(attachment, distal * smooth(y, .52, .61));
     if (hair <= 0) continue;
     const tip = smooth(-x, .28, .40);
     const mid = smooth(-x, .20, .30) * (1 - tip);
@@ -108,8 +112,12 @@ export function createGiruGrabRig(source: THREE.Mesh) {
       for (let i = 0; i < 3; i++) {
         for (let axis = 0; axis < 2; axis++) {
           const k = i * 2 + axis;
-          const target = (axis === 0 ? turn * (.13 + i * .025) : speed * .055 + vertical * .10) + (i ? angles[k - 2] * .18 : 0);
-          velocity[k] += ((target - angles[k]) * 48 - velocity[k] * 9) * step;
+          // Softer links toward the tip produce a delayed follow-through,
+          // rather than three equally driven hinges rotating in lockstep.
+          const target = axis === 0 ? turn * (.065 + i * .012) : speed * .025 + vertical * .055;
+          const stiffness = 42 - i * 10;
+          const damping = 9 - i * 1.7;
+          velocity[k] += ((target - angles[k]) * stiffness - velocity[k] * damping) * step;
           angles[k] = THREE.MathUtils.clamp(angles[k] + velocity[k] * step, -.25, .25);
         }
       }
