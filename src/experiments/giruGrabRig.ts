@@ -10,6 +10,13 @@ export function createGiruGrabRig(source: THREE.Mesh) {
   const left = new THREE.Bone(); left.name = "giru-left-arm"; left.position.set(-.09, .17, 0); body.add(left);
   const right = new THREE.Bone(); right.name = "giru-right-arm"; right.position.set(.14, .16, 0); body.add(right);
   const bones = [root, body, board, left, right];
+  const hairRoot = new THREE.Bone(); hairRoot.name = "giru-hair-root";
+  hairRoot.position.set(-.10, .44, -.065); body.add(hairRoot);
+  const hairMid = new THREE.Bone(); hairMid.name = "giru-hair-mid";
+  hairMid.position.set(-.13, -.025, -.015); hairRoot.add(hairMid);
+  const hairTip = new THREE.Bone(); hairTip.name = "giru-hair-tip";
+  hairTip.position.set(-.11, -.10, 0); hairMid.add(hairTip);
+  bones.push(hairRoot, hairMid, hairTip);
   const p = geometry.getAttribute("position"), index = geometry.getIndex();
   const parent = Array.from({ length: p.count }, (_, i) => i);
   const find = (i: number): number => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
@@ -61,6 +68,17 @@ export function createGiruGrabRig(source: THREE.Mesh) {
     for (let i = 0; i < p.count; i++) if (welded[i] !== i) next.set(next.subarray(welded[i] * 4, welded[i] * 4 + 4), i * 4);
     weights = next;
   }
+  // Feather the attachment into the torso. The envelope excludes the face,
+  // helmet and low shoulder armour; only the projecting ponytail can swing.
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const hair = smooth(-x, .16, .245) * smooth(y, .60, .70) * (1 - smooth(z, .015, .08));
+    if (hair <= 0) continue;
+    const tip = smooth(-x, .28, .40);
+    const mid = smooth(-x, .20, .30) * (1 - tip);
+    indices.set([1, 5, 6, 7], i * 4);
+    weights.set([1 - hair, hair * (1 - mid - tip), hair * mid, hair * tip], i * 4);
+  }
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
   const mesh = new THREE.SkinnedMesh(geometry, source.material);
@@ -72,5 +90,31 @@ export function createGiruGrabRig(source: THREE.Mesh) {
     left.rotation.set(-.1 * t, 0, -.1 * t);
     right.rotation.set(-.7 * t, 0, -.12 * t);
   };
-  return { mesh, bones, applyPose };
+  const angles = new Float64Array(6), velocity = new Float64Array(6);
+  const hairBones = [hairRoot, hairMid, hairTip];
+  const resetHair = () => {
+    angles.fill(0); velocity.fill(0);
+    hairBones.forEach(bone => bone.rotation.set(0, 0, 0));
+  };
+  const updateHair = (dt: number, turn = 0, speed = 0, vertical = 0) => {
+    // Bounded substeps prevent explosions after tab suspension. No vertex work
+    // or allocations per frame: only three spring-driven bone transforms.
+    let remaining = THREE.MathUtils.clamp(Number.isFinite(dt) ? dt : 0, 0, .05);
+    turn = THREE.MathUtils.clamp(turn, -1, 1);
+    speed = THREE.MathUtils.clamp(speed, 0, 1);
+    vertical = THREE.MathUtils.clamp(vertical, -1, 1);
+    while (remaining > 0) {
+      const step = Math.min(remaining, 1 / 120); remaining -= step;
+      for (let i = 0; i < 3; i++) {
+        for (let axis = 0; axis < 2; axis++) {
+          const k = i * 2 + axis;
+          const target = (axis === 0 ? turn * (.13 + i * .025) : speed * .055 + vertical * .10) + (i ? angles[k - 2] * .18 : 0);
+          velocity[k] += ((target - angles[k]) * 48 - velocity[k] * 9) * step;
+          angles[k] = THREE.MathUtils.clamp(angles[k] + velocity[k] * step, -.25, .25);
+        }
+      }
+    }
+    hairBones.forEach((bone, i) => bone.rotation.set(0, angles[i * 2], angles[i * 2 + 1]));
+  };
+  return { mesh, bones, applyPose, updateHair, resetHair };
 }

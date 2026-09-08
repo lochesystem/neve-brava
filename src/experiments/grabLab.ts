@@ -37,13 +37,29 @@ const pose = document.querySelector<HTMLInputElement>("#pose")!;
 document.querySelector("#play")!.addEventListener("click", e => { animate = !animate; (e.target as HTMLElement).textContent = animate ? "Pausar" : "Animar"; });
 pose.addEventListener("input", () => { animate = false; document.querySelector("#play")!.textContent = "Animar"; });
 let applyPose = (_amount: number) => {};
+let updateHair = (_dt: number, _turn: number, _speed: number, _vertical: number) => {};
+let resetHair = () => {};
+let hairEnabled = true, simulateRide = false, jumpAt = -10000;
+let turnInput: HTMLInputElement | undefined;
+if (isGiru) {
+  const panel = document.createElement("section");
+  panel.innerHTML = `<label><input id="hair" type="checkbox" checked> Física do cabelo</label><label><input id="ride" type="checkbox"> Simular curvas e velocidade</label><label>Curva manual <input id="turn" type="range" min="-1" max="1" step=".01" value="0"></label><button id="jump">Simular salto / aterrissagem</button><small>Três ossos com molas leves. Física apenas no laboratório; exportação contém o grab, não a simulação.</small>`;
+  document.querySelector("aside")!.append(panel);
+  document.querySelector<HTMLElement>("aside")!.style.cssText = "max-height:calc(100dvh - 90px);overflow:auto";
+  turnInput = panel.querySelector<HTMLInputElement>("#turn")!;
+  panel.querySelector("#hair")!.addEventListener("change", e => { hairEnabled = (e.target as HTMLInputElement).checked; resetHair(); });
+  panel.querySelector("#ride")!.addEventListener("change", e => { simulateRide = (e.target as HTMLInputElement).checked; });
+  panel.querySelector("#jump")!.addEventListener("click", () => { jumpAt = performance.now(); });
+}
 new GLTFLoader().load(`${import.meta.env.BASE_URL}models/${isGiru ? "giru" : isYeti ? "yeti" : "snow-main"}.glb`, gltf => {
   let source: THREE.Mesh | undefined;
   gltf.scene.traverse(object => { if (object instanceof THREE.Mesh) source = object; });
   if (!source) throw new Error(`Malha do ${characterName} não encontrada`);
-  const rig = isGiru ? createGiruGrabRig(source) : isYeti ? createYetiGrabRig(source) : createSnowmanGrabRig(source);
+  const giruRig = isGiru ? createGiruGrabRig(source) : undefined;
+  const rig = giruRig ?? (isYeti ? createYetiGrabRig(source) : createSnowmanGrabRig(source));
   scene.add(rig.mesh);
   applyPose = rig.applyPose;
+  if (giruRig) { updateHair = giruRig.updateHair; resetHair = giruRig.resetHair; }
   const helper = new THREE.SkeletonHelper(rig.mesh); helper.visible = false; scene.add(helper);
   document.querySelector("#bones")!.addEventListener("change", e => { helper.visible = (e.target as HTMLInputElement).checked; });
   document.querySelector("#status")!.textContent = "Rig aproximado: corpo, braços e prancha. Arraste Pose para comparar com o original.";
@@ -55,6 +71,7 @@ new GLTFLoader().load(`${import.meta.env.BASE_URL}models/${isGiru ? "giru" : isY
     animate = false;
     document.querySelector("#play")!.textContent = "Animar";
     const current = Number(pose.value);
+    resetHair();
     pose.value = "0";
     const times: number[] = [];
     const values = rig.bones.map(() => ({ position: [] as number[], quaternion: [] as number[] }));
@@ -81,6 +98,23 @@ new GLTFLoader().load(`${import.meta.env.BASE_URL}models/${isGiru ? "giru" : isY
     } finally { pose.value = String(current); rig.applyPose(current); download.disabled = false; }
   });
 }, undefined, error => { document.querySelector("#status")!.textContent = String(error); });
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+function resize() {
+  const sidebar = innerWidth >= 640 ? 312 : 0;
+  const width = innerWidth - sidebar;
+  renderer.domElement.style.width = `${width}px`;
+  renderer.domElement.style.marginLeft = `${sidebar}px`;
+  renderer.setSize(width, innerHeight, false); camera.aspect = width / innerHeight; camera.updateProjectionMatrix();
+}
 window.addEventListener("resize", resize); resize();
-renderer.setAnimationLoop(time => { if (animate) pose.value = String((1 - Math.cos(time * .002)) / 2); applyPose(Number(pose.value)); renderer.render(scene, camera); });
+let previousTime = 0;
+renderer.setAnimationLoop(time => {
+  const dt = previousTime ? (time - previousTime) / 1000 : 0; previousTime = time;
+  if (animate) pose.value = String((1 - Math.cos(time * .002)) / 2);
+  applyPose(Number(pose.value));
+  if (hairEnabled) {
+    const jumpTime = (time - jumpAt) / 1000;
+    const vertical = jumpTime >= 0 && jumpTime < .25 ? 1 : jumpTime >= .8 && jumpTime < 1 ? -1 : 0;
+    updateHair(dt, simulateRide ? Math.sin(time * .0015) : Number(turnInput?.value ?? 0), simulateRide ? .85 : 0, vertical);
+  }
+  renderer.render(scene, camera);
+});

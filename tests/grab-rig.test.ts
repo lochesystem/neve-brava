@@ -35,6 +35,17 @@ it.each(["snow-main", "yeti", "giru"])("preserves %s at rest and creates normali
     expect(rig.mesh.getVertexPosition(i, new THREE.Vector3()).toArray().every(Number.isFinite)).toBe(true);
   }
   expect(original.geometry.getAttribute("skinWeight")).toBeUndefined();
+  if (character === "giru") {
+    const hairRig = rig as ReturnType<typeof createGiruGrabRig>;
+    for (let i = 0; i < 300; i++) hairRig.updateHair(i === 0 ? 100 : 1 / 60, 1, 1, Math.sin(i));
+    const hair = hairRig.bones.slice(5);
+    expect(hair.some(bone => Math.abs(bone.rotation.y) > .01)).toBe(true);
+    expect(hair.every(bone => Math.abs(bone.rotation.y) <= .25 && Math.abs(bone.rotation.z) <= .25)).toBe(true);
+    for (let i = 0; i < 600; i++) hairRig.updateHair(1 / 60);
+    expect(hair.every(bone => Math.abs(bone.rotation.y) < .001 && Math.abs(bone.rotation.z) < .001)).toBe(true);
+    hairRig.resetHair();
+    expect(hair.every(bone => bone.quaternion.equals(new THREE.Quaternion()))).toBe(true);
+  }
   if (character !== "snow-main") {
     const boardVertices = Array.from({ length: positions.count }, (_, i) => i).filter(i => weights.getX(i) === 1);
     expect(boardVertices.length).toBeGreaterThan(200);
