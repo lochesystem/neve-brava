@@ -124,6 +124,7 @@ const remoteSlotByPlayer = new Map<string, number>();
 const botSlotByActor = new Map<string, number>();
 const remoteSequenceByPlayer = new Map<string, number>();
 const networkOpponentTargets = new Map<number, NetworkOpponentTarget>();
+const networkContactCooldowns = [0, 0, 0];
 let accumulator = 0;
 let previousTime = performance.now();
 let countdown = 3.35;
@@ -387,6 +388,7 @@ function leaveMultiplayer(): void {
   botSlotByActor.clear();
   remoteSequenceByPlayer.clear();
   networkOpponentTargets.clear();
+  networkContactCooldowns.fill(0);
   renderMultiplayerRoom();
 }
 
@@ -475,6 +477,7 @@ function configureMultiplayerRacers(start: RaceStart): void {
   botSlotByActor.clear();
   remoteSequenceByPlayer.clear();
   networkOpponentTargets.clear();
+  networkContactCooldowns.fill(0);
   entries.forEach((entry, index) => {
     if (entry.playerId) remoteSlotByPlayer.set(entry.playerId, index);
     else botSlotByActor.set(entry.actorId, index);
@@ -1216,12 +1219,24 @@ function frame(now: number): void {
           const frontRunner = raceProgress(guy.lap, guy.s) > raceProgress(leader.lap, leader.s) ? guy : leader;
           for (const event of updateRival(giru, raceProgress(frontRunner.lap, frontRunner.s), frontRunner.x, fixedStep, racePositionOf(giru))) handleRivalEvent(event, giru);
         }
-        if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
-        if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
-        if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);
-        resolveRivalContact(rival, guy);
-        resolveRivalContact(rival, giru);
-        resolveRivalContact(guy, giru);
+        if (multiplayerActive) {
+          // Predict only our own impact: remote transforms belong to their sender.
+          [rival, guy, giru].forEach((opponent, slot) => {
+            networkContactCooldowns[slot] = Math.max(0, networkContactCooldowns[slot] - fixedStep);
+            const contact = { ...opponent, contactCooldown: Math.max(opponent.contactCooldown, networkContactCooldowns[slot]) };
+            if (resolveRiderContact(contact, state)) {
+              networkContactCooldowns[slot] = contact.contactCooldown;
+              input.pulse(.15, .32, 65);
+            }
+          });
+        } else {
+          if (resolveRiderContact(rival, state)) input.pulse(.15, .32, 65);
+          if (resolveRiderContact(guy, state)) input.pulse(.15, .32, 65);
+          if (resolveRiderContact(giru, state)) input.pulse(.15, .32, 65);
+          resolveRivalContact(rival, guy);
+          resolveRivalContact(rival, giru);
+          resolveRivalContact(guy, giru);
+        }
         const racePosition = currentRacePosition();
         if (lastRacePosition > 1 && racePosition === 1) {
           playSnowmanVoice("overtake-first");

@@ -22,6 +22,8 @@ import { dampAlpha, clamp } from "../core/math.ts";
 import { CRASH_RECOVERY_TIME, type GameEvent, type RiderState } from "../core/simulation.ts";
 import type { RivalState } from "../core/rival.ts";
 import type { CharacterId } from "../core/characters.ts";
+import { batchStaticMeshes } from "./staticBatches.ts";
+import { PerformanceOverlay } from "./PerformanceOverlay.ts";
 
 export type Quality = "high" | "medium" | "performance";
 
@@ -647,6 +649,9 @@ export class GameView {
   private finishGateSlot: THREE.Group | null = null;
   private hips: THREE.Group | null = this.riderVisual.getObjectByName("hips") as THREE.Group;
   private particles: Particle[] = [];
+  private performanceOverlay = new PerformanceOverlay();
+  private particlePool: Particle[] = [];
+  private particleGeometry = new THREE.TetrahedronGeometry(1);
   private windRings: WindRing[] = [];
   private snowTrails = new THREE.Group();
   private riderTrail: SnowTrail;
@@ -1081,6 +1086,7 @@ export class GameView {
   private refreshSceneryTreeInstances(): void {
     if (!this.treeModel || !this.sceneryTreeHolder) return;
     for (const child of this.sceneryTreeHolder.children) {
+      if (child instanceof THREE.InstancedMesh) child.dispose();
       if (!(child instanceof THREE.Mesh) || child.userData.persistentEnvironmentAsset) continue;
       child.geometry.dispose();
       const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -1114,7 +1120,8 @@ export class GameView {
     instances.receiveShadow = false;
     instances.userData.persistentEnvironmentAsset = true;
     instances.computeBoundingSphere();
-    this.sceneryTreeHolder.add(instances);
+    this.sceneryTreeHolder.add(...batchStaticMeshes([instances]));
+    instances.dispose();
   }
 
   private addSimpleTreeInstances(trees: Obstacle[], holder: THREE.Group): void {
@@ -1218,6 +1225,7 @@ export class GameView {
 
   rebuildCourse(): void {
     this.world.traverse(object => {
+      if (object instanceof THREE.InstancedMesh) object.dispose();
       if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points)) return;
       if (object.userData.persistentEnvironmentAsset) return;
       object.geometry?.dispose();
@@ -1357,6 +1365,7 @@ export class GameView {
     this.updateWindTarget(windTargetId, rivalState, guyState, giruState);
     this.updateSelectionRing(state, rivalState, guyState, giruState);
     this.renderer.render(this.scene, this.camera);
+    this.performanceOverlay.update(this.renderer.info, this.particles.length, this.particlePool.length);
   }
 
   windShot(rider: Pick<RiderState, "s" | "x" | "y">, target: Pick<RiderState, "s" | "x" | "y">): void {
@@ -2202,6 +2211,9 @@ export class GameView {
       object.castShadow = this.quality !== "performance";
       object.receiveShadow = true;
     });
+    const batches = batchStaticMeshes(group.children as THREE.Mesh[]);
+    group.clear();
+    group.add(...batches);
     this.world.add(group);
   }
 
@@ -2269,16 +2281,23 @@ export class GameView {
 
   private spawnParticle(origin: THREE.Vector3, color: number, size: number, life: number, initialVelocity?: THREE.Vector3): void {
     const particleLimit = this.mobilePerformance ? (this.quality === "performance" ? 28 : 42) : this.quality === "performance" ? 70 : 150;
-    if (this.particles.length > particleLimit) return;
-    const mesh = new THREE.Mesh(new THREE.TetrahedronGeometry(size), new THREE.MeshBasicMaterial({ color, transparent: true }));
-    mesh.position.copy(origin).add(new THREE.Vector3((Math.random() - 0.5) * 1.2, Math.random() * 0.5, (Math.random() - 0.5) * 1.2));
+    if (this.particles.length >= particleLimit) return;
+    const particle = this.particlePool.pop() ?? {
+      mesh: new THREE.Mesh(this.particleGeometry, new THREE.MeshBasicMaterial({ transparent: true })),
+      velocity: new THREE.Vector3(), life: 0, maxLife: 0,
+    };
+    const { mesh } = particle;
+    const material = mesh.material as THREE.MeshBasicMaterial;
+    material.color.setHex(color);
+    material.opacity = 1;
+    mesh.scale.setScalar(size);
+    mesh.rotation.set(0, 0, 0);
+    mesh.position.set(origin.x + (Math.random() - .5) * 1.2, origin.y + Math.random() * .5, origin.z + (Math.random() - .5) * 1.2);
+    if (initialVelocity) particle.velocity.copy(initialVelocity);
+    else particle.velocity.set((Math.random() - .5) * 4, 1.5 + Math.random() * 4, 1 + Math.random() * 3);
+    particle.life = particle.maxLife = life;
     this.scene.add(mesh);
-    this.particles.push({
-      mesh,
-      velocity: initialVelocity?.clone() ?? new THREE.Vector3((Math.random() - 0.5) * 4, 1.5 + Math.random() * 4, 1 + Math.random() * 3),
-      life,
-      maxLife: life,
-    });
+    this.particles.push(particle);
   }
 
   private updateParticles(dt: number): void {
@@ -2292,8 +2311,7 @@ export class GameView {
       particle.mesh.rotation.x += dt * 5;
       if (particle.life <= 0) {
         this.scene.remove(particle.mesh);
-        particle.mesh.geometry.dispose();
-        material.dispose();
+        this.particlePool.push(particle);
         this.particles.splice(index, 1);
       }
     }
