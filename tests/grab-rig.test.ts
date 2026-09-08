@@ -4,8 +4,9 @@ import * as THREE from "three";
 import { createSnowmanGrabRig, bindSnowmanGrabPose } from "../src/view/snowmanGrabRig.ts";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { createYetiGrabRig } from "../src/experiments/yetiGrabRig.ts";
+import { createGiruGrabRig } from "../src/experiments/giruGrabRig.ts";
 
-it.each(["snow-main", "yeti"])("preserves %s at rest and creates normalized finite skinning weights", character => {
+it.each(["snow-main", "yeti", "giru"])("preserves %s at rest and creates normalized finite skinning weights", character => {
   const bytes = readFileSync(new URL(`../public/models/${character}.glb`, import.meta.url));
   const jsonLength = bytes.readUInt32LE(12);
   const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
@@ -20,7 +21,7 @@ it.each(["snow-main", "yeti"])("preserves %s at rest and creates normalized fini
   geometry.setAttribute("position", attribute(primitive.attributes.POSITION, 3));
   geometry.setIndex(attribute(primitive.indices, 1));
   const original = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
-  const rig = character === "yeti" ? createYetiGrabRig(original) : createSnowmanGrabRig(original);
+  const rig = character === "giru" ? createGiruGrabRig(original) : character === "yeti" ? createYetiGrabRig(original) : createSnowmanGrabRig(original);
   const positions = geometry.getAttribute("position");
   const weights = rig.mesh.geometry.getAttribute("skinWeight");
   rig.applyPose(0); rig.mesh.updateMatrixWorld(true); rig.mesh.skeleton.update();
@@ -34,7 +35,7 @@ it.each(["snow-main", "yeti"])("preserves %s at rest and creates normalized fini
     expect(rig.mesh.getVertexPosition(i, new THREE.Vector3()).toArray().every(Number.isFinite)).toBe(true);
   }
   expect(original.geometry.getAttribute("skinWeight")).toBeUndefined();
-  if (character === "yeti") {
+  if (character !== "snow-main") {
     const boardVertices = Array.from({ length: positions.count }, (_, i) => i).filter(i => weights.getX(i) === 1);
     expect(boardVertices.length).toBeGreaterThan(200);
     const a = boardVertices[0], b = boardVertices[Math.floor(boardVertices.length / 2)];
