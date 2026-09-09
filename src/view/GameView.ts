@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { createSnowmanGrabRig, bindSnowmanGrabPose } from "./snowmanGrabRig.ts";
+import { createCharacterGrabModel, bindCharacterGrab } from "./characterGrab.ts";
+import { bindGiruHair } from "../experiments/giruGrabRig.ts";
 import {
   COURSE_HALF_WIDTH,
   COURSE_LENGTH,
@@ -653,6 +655,7 @@ export class GameView {
   private particles: Particle[] = [];
   private playerGrabPose: ((amount: number) => void) | null = null;
   private playerGrabAmount = 0;
+  private hairPoses = new WeakMap<THREE.Group, ReturnType<typeof bindGiruHair>>();
   private remoteGrabPoses = new WeakMap<THREE.Group, { apply: (amount: number) => void; amount: number }>();
   private performanceOverlay = new PerformanceOverlay();
   private particlePool: Particle[] = [];
@@ -793,7 +796,7 @@ export class GameView {
     new GLTFLoader().load(
       `${import.meta.env.BASE_URL}models/yeti.glb`,
       gltf => {
-        const model = gltf.scene;
+        const model = createCharacterGrabModel(gltf.scene, "yeti");
         const bounds = new THREE.Box3().setFromObject(model);
         const center = bounds.getCenter(new THREE.Vector3());
         const height = Math.max(.001, bounds.max.y - bounds.min.y);
@@ -821,7 +824,7 @@ export class GameView {
     new GLTFLoader().load(
       `${import.meta.env.BASE_URL}models/guy-v2.glb`,
       gltf => {
-        const model = gltf.scene;
+        const model = createCharacterGrabModel(gltf.scene, "guy");
         const bounds = new THREE.Box3().setFromObject(model);
         const center = bounds.getCenter(new THREE.Vector3());
         const height = Math.max(.001, bounds.max.y - bounds.min.y);
@@ -849,7 +852,7 @@ export class GameView {
     new GLTFLoader().load(
       `${import.meta.env.BASE_URL}models/giru.glb`,
       gltf => {
-        const model = gltf.scene;
+        const model = createCharacterGrabModel(gltf.scene, "giru");
         const bounds = new THREE.Box3().setFromObject(model);
         const center = bounds.getCenter(new THREE.Vector3());
         const height = Math.max(.001, bounds.max.y - bounds.min.y);
@@ -1196,15 +1199,14 @@ export class GameView {
     ];
     for (const slot of slots) {
       this.remoteGrabPoses.delete(slot.visual);
+      this.hairPoses.delete(slot.visual);
       const template = this.characterModels.get(slot.id);
       if (!template) continue;
-      const instance = slot.id === "snowman" ? cloneSkeleton(template) : template.clone(true);
-      if (slot.player && slot.id === "snowman" && instance.getObjectByName("board-and-boots")) {
-        this.playerGrabPose = bindSnowmanGrabPose(instance);
-      }
-      if (!slot.player && slot.id === "snowman" && instance.getObjectByName("board-and-boots")) {
-        this.remoteGrabPoses.set(slot.visual, { apply: bindSnowmanGrabPose(instance), amount: 0 });
-      }
+      const instance = cloneSkeleton(template);
+      const apply = slot.id === "snowman" && instance.getObjectByName("board-and-boots") ? bindSnowmanGrabPose(instance) : bindCharacterGrab(instance);
+      if(slot.player) this.playerGrabPose = apply;
+      else if(apply) this.remoteGrabPoses.set(slot.visual,{apply,amount:0});
+      if(slot.id === "giru" && instance.getObjectByName("giru-hair-root"))this.hairPoses.set(slot.visual,bindGiruHair(instance));
       if (slot.player) instance.position.y = PLAYER_MODEL_Y_OFFSET[slot.id];
       slot.visual.traverse(object => { if (object instanceof THREE.SkinnedMesh) object.skeleton.dispose(); });
       slot.visual.clear();
@@ -1271,6 +1273,7 @@ export class GameView {
     const grabTarget = grabHeld && !state.grounded && state.recovering <= 0 && state.liftTime <= 0 ? 1 : 0;
     this.playerGrabAmount = THREE.MathUtils.damp(this.playerGrabAmount, grabTarget, grabTarget ? 12 : 22, dt);
     this.playerGrabPose?.(this.playerGrabAmount);
+    this.hairPoses.get(this.riderVisual)?.updateHair(dt, state.carve, state.speed / 45, state.grounded ? 0 : .35);
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
@@ -1623,6 +1626,7 @@ export class GameView {
       grab.apply(grab.amount);
     }
     visual.position.y = -pump;
+    this.hairPoses.get(visual)?.updateHair(dt, state.carve, state.speed / 45, state.grounded ? 0 : .35);
     visual.scale.set(1 + pump * .35, 1 - pump * .7, 1 + pump * .35);
     const slowAura = group.userData.slowAura as THREE.Group;
     slowAura.visible = group.visible && (state.slowTime > 0 || state.timeWarpTime > 0);

@@ -6,6 +6,7 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { createYetiGrabRig } from "../src/experiments/yetiGrabRig.ts";
 import { createGiruGrabRig } from "../src/experiments/giruGrabRig.ts";
 import { createGuyGrabRig } from "../src/experiments/guyGrabRig.ts";
+import { createCharacterGrabModel, bindCharacterGrab } from "../src/view/characterGrab.ts";
 
 it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creates normalized finite skinning weights", character => {
   const bytes = readFileSync(new URL(`../public/models/${character}.glb`, import.meta.url));
@@ -68,6 +69,19 @@ it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creat
     expect(hair.every(bone => bone.quaternion.equals(new THREE.Quaternion()))).toBe(true);
   }
   if (character !== "snow-main") {
+    const id=character==="guy-v2"?"guy":character as "yeti"|"giru";
+    const template=createCharacterGrabModel(original,id);
+    const first=clone(template),second=clone(template);
+    const apply=bindCharacterGrab(first)!;
+    expect(apply).toBeTypeOf("function");
+    const bodyName=`${id}-body`;
+    const restY=second.getObjectByName(bodyName)!.position.y;
+    apply(1);
+    expect(first.getObjectByName(bodyName)!.position.y).toBeLessThan(restY);
+    expect(second.getObjectByName(bodyName)!.position.y).toBe(restY);
+    expect(template.getObjectByName(bodyName)!.position.y).toBe(restY);
+    apply(0);
+    expect(first.getObjectByName(bodyName)!.position.y).toBeCloseTo(restY);
     const boardVertices = Array.from({ length: positions.count }, (_, i) => i).filter(i => weights.getX(i) === 1);
     expect(boardVertices.length).toBeGreaterThan(200);
     const a = boardVertices[0], b = boardVertices[Math.floor(boardVertices.length / 2)];

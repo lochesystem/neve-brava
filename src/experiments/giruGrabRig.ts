@@ -94,8 +94,12 @@ export function createGiruGrabRig(source: THREE.Mesh) {
     left.rotation.set(-.1 * t, 0, -.1 * t);
     right.rotation.set(-.7 * t, 0, -.12 * t);
   };
+  return { mesh, bones, applyPose, ...bindGiruHair(mesh) };
+}
+
+export function bindGiruHair(mesh: THREE.Object3D) {
   const angles = new Float64Array(6), velocity = new Float64Array(6);
-  const hairBones = [hairRoot, hairMid, hairTip];
+  const hairBones = ["giru-hair-root", "giru-hair-mid", "giru-hair-tip"].map(name => mesh.getObjectByName(name)!);
   const resetHair = () => {
     angles.fill(0); velocity.fill(0);
     hairBones.forEach(bone => bone.rotation.set(0, 0, 0));
@@ -124,5 +128,5 @@ export function createGiruGrabRig(source: THREE.Mesh) {
     }
     hairBones.forEach((bone, i) => bone.rotation.set(0, angles[i * 2], angles[i * 2 + 1]));
   };
-  return { mesh, bones, applyPose, updateHair, resetHair };
+  return { updateHair, resetHair };
 }
