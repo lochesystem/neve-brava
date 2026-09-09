@@ -36,6 +36,17 @@ it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creat
     expect(rig.mesh.getVertexPosition(i, new THREE.Vector3()).toArray().every(Number.isFinite)).toBe(true);
   }
   expect(original.geometry.getAttribute("skinWeight")).toBeUndefined();
+  if (character === "guy-v2") {
+    const skinIndices = rig.mesh.geometry.getAttribute("skinIndex");
+    for (const id of [5, 7]) {
+      const thighVertices = Array.from({length:positions.count},(_,i)=>i).filter(i=>skinIndices.getY(i)===id && weights.getY(i)>.999);
+      expect(thighVertices.length).toBeGreaterThan(2);
+      const a=thighVertices[0],b=thighVertices[Math.floor(thighVertices.length/2)];
+      const restDistance=new THREE.Vector3().fromBufferAttribute(positions,a).distanceTo(new THREE.Vector3().fromBufferAttribute(positions,b));
+      const posedDistance=rig.mesh.getVertexPosition(a,new THREE.Vector3()).distanceTo(rig.mesh.getVertexPosition(b,new THREE.Vector3()));
+      expect(posedDistance).toBeCloseTo(restDistance,3);
+    }
+  }
   if (character === "giru") {
     const hairRig = rig as ReturnType<typeof createGiruGrabRig>;
     const skinIndices = rig.mesh.geometry.getAttribute("skinIndex");

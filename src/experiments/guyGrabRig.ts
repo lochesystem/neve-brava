@@ -13,6 +13,16 @@ export function createGuyGrabRig(source: THREE.Mesh) {
   const left = bone("guy-left-arm", body, -.12, .16);
   const right = bone("guy-right-arm", body, .12, .16);
   const bones = [root, body, board, left, right];
+  const legs = [-1, 1].map((side, i) => {
+    const hip = new THREE.Vector3(side * .11, .43, 0);
+    const knee = new THREE.Vector3(side * .15, .29, .025);
+    const ankle = new THREE.Vector3(side * .19, .15, .015);
+    const thigh = bone(`guy-thigh-${i}`, root, hip.x, hip.y);
+    const shin = bone(`guy-shin-${i}`, root, knee.x, knee.y); shin.position.z = knee.z;
+    const thighIndex = bones.length; bones.push(thigh, shin);
+    return { hip, knee, ankle, thigh, shin, thighIndex,
+      upper: knee.clone().sub(hip), lower: ankle.clone().sub(knee) };
+  });
   const p = geometry.getAttribute("position"), index = geometry.getIndex();
   const parent = Array.from({length:p.count}, (_, i) => i);
   const find = (i: number): number => { while(parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
@@ -50,6 +60,18 @@ export function createGuyGrabRig(source: THREE.Mesh) {
     for(let i=0;i<p.count;i++)if(canonical[i]!==i)next.set(next.subarray(canonical[i]*4,canonical[i]*4+4),i*4);
     weights=next;
   }
+  // Pants follow rigid thigh/shin transforms with blends only around joints.
+  // Never blend the whole thigh directly between the torso and moving board.
+  for(let i=0;i<p.count;i++) {
+    const x=p.getX(i), y=p.getY(i);
+    if(find(i)===boardIsland || y>=.40 || weights[i*4+1]+weights[i*4+2]>.08)continue;
+    const leg=legs[x<0?0:1];
+    const hipBlend=smooth(y,.335,.40);
+    const boot=1-smooth(y,.145,.205);
+    const knee=smooth(y,.25,.32);
+    indices.set([2,leg.thighIndex,leg.thighIndex+1,1],i*4);
+    weights.set([boot,(1-boot)*(1-hipBlend)*knee,(1-boot)*(1-hipBlend)*(1-knee),(1-boot)*hipBlend],i*4);
+  }
   geometry.setAttribute("skinIndex",new THREE.Uint16BufferAttribute(indices,4));
   geometry.setAttribute("skinWeight",new THREE.Float32BufferAttribute(weights,4));
   const mesh=new THREE.SkinnedMesh(geometry,source.material);mesh.add(root);mesh.bind(new THREE.Skeleton(bones));mesh.frustumCulled=false;
@@ -58,10 +80,28 @@ export function createGuyGrabRig(source: THREE.Mesh) {
     body.position.set(0,.43-.045*t,-.025*t);body.rotation.x=.22*t;
     // Bring the boots AND board out in front; vertical-only motion crushes
     // the knees into the boots instead of reading as an airborne grab.
-    board.position.set(0,.075+.13*t,.25*t);board.rotation.x=-.28*t;
+    board.position.set(0,.075+.10*t,.18*t);board.rotation.x=-.28*t;
     left.rotation.set(-.70*t,0,.30*t);
     right.position.set(.12,.16-.045*t,.035*t);
     right.rotation.set(-.60*t,0,-.30*t);
+    for(const leg of legs) {
+      if(t===0) {
+        leg.thigh.position.copy(leg.hip); leg.shin.position.copy(leg.knee);
+        leg.thigh.quaternion.identity(); leg.shin.quaternion.identity(); continue;
+      }
+      const hip=leg.hip.clone().sub(new THREE.Vector3(0,.43,0)).applyEuler(body.rotation).add(body.position);
+      const ankle=leg.ankle.clone().sub(new THREE.Vector3(0,.075,0)).applyEuler(board.rotation).add(board.position);
+      const direction=ankle.clone().sub(hip);
+      const a=leg.upper.length(), b=leg.lower.length();
+      const distance=THREE.MathUtils.clamp(direction.length(),Math.abs(a-b)+1e-5,a+b-1e-5);
+      direction.normalize();
+      const along=(a*a-b*b+distance*distance)/(2*distance);
+      const pole=new THREE.Vector3(0,0,1).addScaledVector(direction,-direction.z).normalize();
+      const knee=hip.clone().addScaledVector(direction,along).addScaledVector(pole,Math.sqrt(Math.max(0,a*a-along*along)));
+      leg.thigh.position.copy(hip); leg.shin.position.copy(knee);
+      leg.thigh.quaternion.setFromUnitVectors(leg.upper.clone().normalize(),knee.clone().sub(hip).normalize());
+      leg.shin.quaternion.setFromUnitVectors(leg.lower.clone().normalize(),ankle.clone().sub(knee).normalize());
+    }
   };
   return {mesh,bones,applyPose};
 }
