@@ -110,22 +110,25 @@
               <p class="tagline">Quatro pilotos. Quatro montanhas.<br />Uma corrida até o limite.</p>
             </div>
           </div>
-          <div class="title-panel">
-            <p class="panel-kicker">A MONTANHA CHAMOU.</p>
+          <div class="title-panel sr-panel sr-panel--snow">
+            <div class="sr-panel__surface">
+            <p class="sr-kicker">A montanha chamou.</p>
             <h2>Corra pela<br />tempestade.</h2>
-            <p>Escolha seu piloto, domine as curvas e use tudo o que encontrar para chegar primeiro.</p>
-            <div id="controller-card" class="controller-card">
-              <span class="controller-light"></span>
-              <div><small>CONTROLE OBRIGATÓRIO</small><b id="controller-name">Conecte o DualSense e pressione um botão</b></div>
-            </div>
+            <p class="title-intro sr-copy">Escolha seu piloto, domine as curvas e deixe seus rivais na neve.</p>
             <div class="menu-actions">
-              <button id="campaign-button" class="primary focusable"><span>✕</span> MODO CAMPANHA</button>
-              <button id="multiplayer-button" class="secondary multiplayer-title-button focusable"><span>◎</span> MULTIPLAYER</button>
-              <button id="install-button" class="secondary install-button focusable hidden"><span>↓</span> INSTALAR JOGO</button>
-              <button id="settings-button" class="secondary focusable">CONFIGURAÇÕES</button>
+              <button id="campaign-button" class="primary focusable sr-button sr-button--primary"><svg class="sr-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 4 12 8-12 8Z" fill="currentColor"/></svg> MODO CAMPANHA</button>
+              <button id="multiplayer-button" class="secondary multiplayer-title-button focusable sr-button sr-button--pine"><svg class="sr-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-4a5 5 0 0 0-2-4"/></svg> MULTIPLAYER</button>
+              <button id="install-button" class="secondary install-button focusable hidden sr-button sr-button--quiet"><span aria-hidden="true">↓</span> INSTALAR JOGO</button>
+              <button id="settings-button" class="secondary focusable sr-button sr-button--quiet"><svg class="sr-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v18M12 3v18M19 3v18M2 8h6m1 8h6m1-10h6"/></svg> CONFIGURAÇÕES</button>
+            </div>
+            <div id="controller-card" class="controller-card" role="status">
+              <span class="controller-light" aria-hidden="true"></span>
+              <div><small>CONTROLE OBRIGATÓRIO</small><b id="controller-name">Conecte o DualSense e pressione um botão</b></div>
             </div>
             <p id="install-hint" class="install-hint hidden">No Safari, toque em <b>Compartilhar</b> e escolha <b>Adicionar à Tela de Início</b>.</p>
             <p id="dev-hint" class="dev-hint">Para testes sem controle, abra com <code>?dev=1</code>.</p>
+            </div>
+            <div class="title-signoff" aria-hidden="true">Neve fresca. Rivalidade aquecida.</div>
           </div>
         </div>
       </section>

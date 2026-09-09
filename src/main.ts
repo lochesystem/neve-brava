@@ -1,4 +1,6 @@
 import "./styles.css";
+import "./ui/design-system.css";
+import "./ui/title-screen.css";
 import {
   COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterFor, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
   type CourseDefinition, type ItemKind,
@@ -1071,6 +1073,7 @@ function updateHud(force = false): void {
 function updateControllerStatus(): void {
   const available = input.compatible || input.usingDevFallback || input.touchEnabled;
   controllerCard.classList.toggle("connected", available);
+  controllerCard.querySelector("small")!.textContent = input.compatible ? "CONTROLE CONECTADO" : input.touchEnabled ? "CONTROLES TOUCH" : input.usingDevFallback ? "MODO TECLADO" : "CONECTE SEU CONTROLE";
   startButton.disabled = !available;
   controllerName.textContent = input.compatible ? input.gamepadName : input.touchEnabled
     ? "Controles touch prontos · jogue na horizontal"

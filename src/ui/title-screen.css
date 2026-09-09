@@ -1,0 +1,67 @@
+/* Scope the first migration to the home screen, after legacy styles. */
+#title-screen { background:radial-gradient(ellipse at 26% 25%,#faffff 0,transparent 47%),linear-gradient(155deg,#c9e8f2,#ecf7f7 65%,#daeef5); overflow:auto; overflow-x:hidden; touch-action:pan-y; }
+#title-screen::before { clip-path:ellipse(75% 50% at 45% 100%); bottom:0; height:55%; background:linear-gradient(170deg,#bedde9,#fff); filter:none; }
+#title-screen .title-layout { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:clamp(24px,4vw,64px); width:min(1370px,calc(100% - 96px)); min-height:100dvh; padding:58px 0; }
+#title-screen .title-brand { height:auto; min-height:540px; }
+#title-screen .title-brand-copy { top:-30px; left:0; width:100%; text-align:center; }
+#title-screen .title-logo { display:block; width:clamp(240px,27vw,370px); margin:0 auto; filter:drop-shadow(0 8px 4px #30455a1f); }
+#title-screen .title-brand h1 { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+#title-screen .title-brand .mountain-mark,#title-screen .title-brand .eyebrow {display:none;}
+#title-screen .tagline { margin:-16px 0 0; color:var(--sr-pine); text-shadow:none; font:800 15px/1.4 var(--sr-display); letter-spacing:.09em; text-transform:uppercase; }
+#title-screen .title-hero { display:block; width:clamp(480px,55vw,790px); left:50%; bottom:-55px; transform:translateX(-53%); filter:none; }
+#title-screen .title-panel { padding:17px; border-radius:24px; transform:none; background:var(--sr-wood-surface); border:2px solid var(--sr-wood-dark); box-shadow:var(--sr-panel-shadow); }
+#title-screen .title-panel h2 { font:800 clamp(42px,4.5vw,66px)/.94 var(--sr-display); letter-spacing:-.015em; margin:0 0 14px; font-style:normal; }
+#title-screen .title-intro { margin:0 0 24px; max-width:390px; }
+#title-screen .menu-actions { width:100%; gap:12px; }
+#title-screen .controller-card { margin:22px 0 0; width:100%; padding:10px 0 0; border:0; border-top:1px solid #ad9a793d; border-radius:0; box-shadow:none; color:var(--sr-muted); background:none; gap:12px; }
+#title-screen .controller-card.connected {background:none;}
+#title-screen .controller-card small { display:block; font:800 10px var(--sr-display); letter-spacing:.12em; opacity:1; color:var(--sr-pine); }
+#title-screen .controller-card b { font:400 11px/1.5 var(--sr-body); max-width:100%; }
+#title-screen .controller-light {width:7px;height:7px;box-shadow:0 0 0 4px #a882401a;}
+#title-screen .connected .controller-light {background:var(--sr-pine);box-shadow:0 0 0 4px #24594f12;}
+#title-screen .dev-hint {font:11px/1.4 var(--sr-body);color:var(--sr-muted);margin:10px 0 0;}
+#title-screen .dev-hint code {color:var(--sr-pine);}
+#title-screen .install-hint {margin:10px 0 0;width:100%;}
+#title-screen .title-signoff { position:absolute; bottom:-43px; left:12%; right:12%; text-align:center; color:var(--sr-pine); font:800 12px var(--sr-display); letter-spacing:.14em; text-transform:uppercase; }
+@media(max-height:700px) and (min-width:701px) {
+  #title-screen .title-layout {padding:32px 0;gap:24px;width:calc(100% - 64px);}
+  #title-screen .title-brand {min-height:440px;}
+  #title-screen .title-logo {width:260px;}
+  #title-screen .title-hero {width:51vw;bottom:-30px;}
+  #title-screen .sr-panel__surface {padding:22px;}
+  #title-screen .title-panel h2 {font-size:44px;}
+  #title-screen .title-intro {margin-bottom:16px;font-size:12px;}
+  #title-screen .controller-card {margin-top:15px;}
+}
+@media(orientation:landscape) and (max-height:500px) {
+  #title-screen .title-layout {width:100%;min-height:100dvh;padding:24px max(18px,env(safe-area-inset-right)) 24px max(18px,env(safe-area-inset-left));grid-template-columns:.95fr 1.05fr;gap:18px;}
+  #title-screen .title-brand {height:calc(100dvh - 48px);min-height:260px;}
+  #title-screen .title-brand-copy {top:-25px;left:0;}
+  #title-screen .title-logo {width:clamp(125px,37vh,180px);}
+  #title-screen .tagline {display:none;}
+  #title-screen .title-hero {height:82%;width:115%;bottom:-20px;object-fit:contain;object-position:center bottom;}
+  #title-screen .title-panel {padding:9px;border-radius:17px;}
+  #title-screen .sr-panel__surface {padding:15px 18px;}
+  #title-screen .title-panel::before {top:-22px;height:43px;}
+  #title-screen .sr-kicker {font-size:10px;margin-bottom:4px;}
+  #title-screen .title-panel h2 {font-size:clamp(27px,7.6vh,36px);margin-bottom:8px;}
+  #title-screen .title-panel h2 br {display:none;}
+  #title-screen .title-intro {display:none;}
+  #title-screen .menu-actions {gap:8px;}
+  #title-screen .sr-button {min-height:44px;padding:8px 12px;font-size:18px;}
+  #title-screen .sr-button--quiet {font-size:15px;}
+  #title-screen .controller-card {margin-top:10px;padding-top:7px;}
+  #title-screen .controller-card small,#title-screen .dev-hint,#title-screen .title-signoff {display:none;}
+  #title-screen .controller-card b {font-size:10px;}
+}
+@media(max-width:700px) and (orientation:portrait) {
+  #title-screen .title-layout {width:calc(100% - 36px);display:flex;flex-direction:column;gap:12px;padding:16px 0 70px;}
+  #title-screen .title-brand {min-height:180px;height:180px;width:100%;}
+  #title-screen .title-brand-copy {top:-30px;}
+  #title-screen .title-logo {width:220px;}
+  #title-screen .title-hero,#title-screen .tagline {display:none;}
+  #title-screen .title-panel {width:100%;padding:12px;}
+  #title-screen .sr-panel__surface {padding:22px;}
+  #title-screen .title-panel h2 {font-size:44px;}
+}
+@media(prefers-reduced-motion:reduce) { #title-screen,#title-screen .title-snow i {animation:none;} }
