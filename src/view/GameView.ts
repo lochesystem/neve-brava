@@ -676,6 +676,7 @@ export class GameView {
   private snowfall: THREE.Points | null = null;
   private snowfallPositions: Float32Array | null = null;
   private skyDome: THREE.Mesh | null = null;
+  private mountainPanorama: THREE.Mesh | null = null;
   private skyClouds = new THREE.Group();
   private skyMountains = new THREE.Group();
   private characterModels = new Map<CharacterId, THREE.Group>();
@@ -1735,13 +1736,33 @@ export class GameView {
     this.createSkyMountains();
     this.createSkyClouds();
     this.scene.add(this.skyDome, this.skyMountains, this.skyClouds);
+    // A single unlit sphere: no environment-map conversion, extra lights or
+    // post-processing. Keep the procedural sky until the texture is ready.
+    new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}images/scenery/alpine-sunset-v1.png`, texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      const panorama = new THREE.Mesh(
+        new THREE.SphereGeometry(410, 48, 24),
+        new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false }),
+      );
+      panorama.renderOrder = -990;
+      panorama.frustumCulled = false;
+      this.mountainPanorama = panorama;
+      this.scene.add(panorama);
+      this.applyCourseSkyPalette();
+    }, undefined, error => console.warn("Panorama indisponível; mantendo o céu original.", error));
   }
 
   private applyCourseSkyPalette(): void {
+    const panoramaActive = this.mountainPanorama !== null && getActiveCourse().id === "vale-bravo";
+    if (this.mountainPanorama) this.mountainPanorama.visible = panoramaActive;
+    if (this.skyDome) this.skyDome.visible = !panoramaActive;
+    this.skyMountains.visible = !panoramaActive;
+    this.skyClouds.visible = !panoramaActive;
     const palette = COURSE_SKIES[getActiveCourse().id] ?? DEFAULT_SKY;
     this.scene.background = new THREE.Color(palette.background);
     this.scene.fog = new THREE.Fog(
-      palette.fog,
+      panoramaActive ? 0xb9bedb : palette.fog,
       this.quality === "performance" ? 105 : 135,
       this.quality === "performance" ? 350 : 470,
     );
@@ -1817,6 +1838,8 @@ export class GameView {
 
   private updateSky(dt: number): void {
     this.skyDome?.position.copy(this.camera.position);
+    // Translation only. World orientation stays fixed through turns and grabs.
+    this.mountainPanorama?.position.copy(this.camera.position);
     this.skyMountains.position.copy(this.camera.position);
     this.skyMountains.position.y -= 8;
     this.skyClouds.position.copy(this.camera.position);
