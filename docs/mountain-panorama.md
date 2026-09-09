@@ -1,6 +1,6 @@
 # Mountain panorama pilot
 
-Vale Bravo uses `public/images/scenery/alpine-sunset-v1.png`, generated with the built-in image_gen tool (not CLI). Other courses retain their original skies. The original sky also remains as a loading/error fallback.
+Vale Bravo uses `public/images/scenery/alpine-sunset-v1.png`, generated with the built-in image_gen tool (not CLI). Other courses now have their own panoramas; see `course-panorama-art.md`. The original sky remains as a loading/error fallback.
 
 One unlit inward-facing sphere, one texture, no cube-map conversion or post-processing. Only camera translation is copied; orientation remains world-fixed. Procedural clouds and cones are hidden when the panorama is active. Fog is tinted lavender to blend the terrain into the painted horizon. Gameplay, terrain and obstacles are unchanged.
 

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { COURSE_PANORAMAS } from "./coursePanoramas.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { createSnowmanGrabRig, bindSnowmanGrabPose } from "./snowmanGrabRig.ts";
@@ -676,7 +677,10 @@ export class GameView {
   private snowfall: THREE.Points | null = null;
   private snowfallPositions: Float32Array | null = null;
   private skyDome: THREE.Mesh | null = null;
-  private mountainPanorama: THREE.Mesh | null = null;
+  private mountainPanorama: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial> | null = null;
+  private panoramaRequested = "";
+  private panoramaLoaded = "";
+  private panoramaRequestVersion = 0;
   private skyClouds = new THREE.Group();
   private skyMountains = new THREE.Group();
   private characterModels = new Map<CharacterId, THREE.Group>();
@@ -1738,23 +1742,45 @@ export class GameView {
     this.scene.add(this.skyDome, this.skyMountains, this.skyClouds);
     // A single unlit sphere: no environment-map conversion, extra lights or
     // post-processing. Keep the procedural sky until the texture is ready.
-    new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}images/scenery/alpine-sunset-v1.png`, texture => {
+  }
+
+  private loadCoursePanorama(courseId: string): void {
+    if (this.panoramaRequested === courseId) return;
+    this.panoramaRequested = courseId;
+    const requestVersion = ++this.panoramaRequestVersion;
+    this.panoramaLoaded = "";
+    if (this.mountainPanorama) {
+      this.mountainPanorama.material.map?.dispose();
+      this.mountainPanorama.material.map = null;
+      this.mountainPanorama.visible = false;
+    }
+    const definition = COURSE_PANORAMAS[courseId];
+    if (!definition) return;
+    new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}images/scenery/${definition.file}`, texture => {
+      // A previous course can finish downloading after the player switches.
+      if (this.panoramaRequested !== courseId || requestVersion !== this.panoramaRequestVersion) { texture.dispose(); return; }
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
-      const panorama = new THREE.Mesh(
+      const panorama = this.mountainPanorama ?? new THREE.Mesh(
         new THREE.SphereGeometry(410, 48, 24),
-        new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false }),
+        new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false }),
       );
       panorama.renderOrder = -990;
       panorama.frustumCulled = false;
+      panorama.material.map?.dispose();
+      panorama.material.map = texture;
+      panorama.material.needsUpdate = true;
       this.mountainPanorama = panorama;
+      this.panoramaLoaded = courseId;
       this.scene.add(panorama);
       this.applyCourseSkyPalette();
     }, undefined, error => console.warn("Panorama indisponível; mantendo o céu original.", error));
   }
 
   private applyCourseSkyPalette(): void {
-    const panoramaActive = this.mountainPanorama !== null && getActiveCourse().id === "vale-bravo";
+    const courseId = getActiveCourse().id;
+    this.loadCoursePanorama(courseId);
+    const panoramaActive = this.mountainPanorama !== null && this.panoramaLoaded === courseId;
     if (this.mountainPanorama) this.mountainPanorama.visible = panoramaActive;
     if (this.skyDome) this.skyDome.visible = !panoramaActive;
     this.skyMountains.visible = !panoramaActive;
@@ -1762,7 +1788,7 @@ export class GameView {
     const palette = COURSE_SKIES[getActiveCourse().id] ?? DEFAULT_SKY;
     this.scene.background = new THREE.Color(palette.background);
     this.scene.fog = new THREE.Fog(
-      panoramaActive ? 0xb9bedb : palette.fog,
+      panoramaActive ? COURSE_PANORAMAS[courseId].fog : palette.fog,
       this.quality === "performance" ? 105 : 135,
       this.quality === "performance" ? 350 : 470,
     );
