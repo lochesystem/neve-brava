@@ -1,6 +1,17 @@
 import {readFileSync,existsSync} from 'node:fs';
 import {expect,it} from 'vitest';
 const file=(path:string)=>readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
+it('padroniza todos os menus sem mudar os contratos de navegação',()=>{
+  const html=file('index.html');
+  for(const screen of ['campaign','character','multiplayer','pause','results','settings','controls']) {
+    expect(html).toMatch(new RegExp(`id="${screen}-screen" class="sr-menu `));
+  }
+  for(const id of ['resume-button','start-button','character-confirm-button','next-track-button','settings-back-button','join-room-button']) {
+    expect(html).toMatch(new RegExp(`id="${id}" class="[^"]*focusable[^\"]*sr-button`));
+  }
+  expect(html).not.toMatch(/sr-button sr-button--\w+ sr-button/);
+  expect(file('src/ui/menu-screens.css')).not.toMatch(/\.hud|#hud/);
+});
 it('preserva os IDs e focos dos comandos da tela inicial',()=>{
   const html=file('index.html');
   for(const id of ['campaign-button','multiplayer-button','install-button','settings-button']) {

@@ -1,6 +1,7 @@
 import "./styles.css";
 import "./ui/design-system.css";
 import "./ui/title-screen.css";
+import "./ui/menu-screens.css";
 import {
   COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterFor, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
   type CourseDefinition, type ItemKind,

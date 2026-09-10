@@ -1,0 +1,63 @@
+/* Alpine Lodge menu migration. Keep gameplay HUD and layout/navigation intact. */
+.sr-menu {
+  color:var(--sr-ink); font-family:var(--sr-body);
+  --ink:var(--sr-ink); --paper:var(--sr-paper); --yellow:var(--sr-gold);
+}
+.sr-menu:is(.modal,.campaign-screen,.multiplayer-screen,.results),
+.sr-menu .character-head > div:nth-child(2) {
+  border:10px solid var(--sr-wood); border-radius:24px;
+  background:linear-gradient(115deg,var(--sr-paper),#f3e7ce);
+  box-shadow:0 0 0 2px var(--sr-wood-dark),inset 0 2px 0 white,0 7px 0 var(--sr-wood-dark),0 18px 35px #29475e26;
+  transform:none;
+}
+.sr-menu:is(.modal,.campaign-screen,.multiplayer-screen) {
+  background:url('/images/ui/snow-cap.png') center -82px / 100% 170px no-repeat,linear-gradient(115deg,var(--sr-paper),#f3e7ce);
+  max-height:calc(100dvh - 40px); overflow:auto; touch-action:pan-y;
+}
+.sr-menu h2 { font-family:var(--sr-display); font-weight:800; font-style:normal; letter-spacing:-.015em; }
+.sr-menu .eyebrow { font-family:var(--sr-display); color:#86511d; letter-spacing:.16em; }
+.sr-menu .sr-button { width:auto; flex-shrink:0; font-size:20px; }
+.sr-menu .menu-actions .sr-button,.sr-menu #settings-back-button { width:100%; }
+.sr-menu .sr-button--quiet {font-size:17px;}
+.sr-menu .character-confirm {position:absolute;width:min(580px,80%);}
+.sr-menu .character-confirm:is(:hover,:focus-visible,.gamepad-focus) {transform:translateX(-50%) translateY(-2px);}
+.sr-menu .character-confirm:active {transform:translateX(-50%) translateY(3px);}
+.sr-menu :is(.track-card,.character-card,.result-winner,.track-showcase) {
+  border-color:var(--sr-wood-dark); border-radius:var(--sr-radius);
+  box-shadow:0 4px 0 var(--sr-wood-dark); font-family:var(--sr-body);
+}
+.sr-menu .track-card {background:var(--sr-ice);}
+.sr-menu .track-card.selected {background:var(--sr-gold); transform:none;}
+.sr-menu :is(.track-card strong,.track-card-index,.character-card strong,.winner-label b,.track-showcase-copy strong) {font-family:var(--sr-display);font-style:normal;}
+.sr-menu .character-card-copy {background:var(--sr-paper);border-color:var(--sr-wood-dark);}
+.sr-menu .character-card.selected {outline:3px solid var(--sr-gold);outline-offset:3px;transform:translateY(-4px);filter:none;}
+.sr-menu .character-card.selected::after {border:2px solid var(--sr-gold);border-radius:10px;}
+.sr-menu .character-card > i,.sr-menu .winner-label {background:var(--sr-pine);border-radius:10px;}
+.sr-menu .player-flag {background:var(--sr-pine);border-color:var(--sr-wood-dark);border-radius:var(--sr-radius);box-shadow:0 4px 0 var(--sr-wood-dark);transform:none;}
+.sr-menu :is(.campaign-footer,.multiplayer-head,.setting-row) {border-color:#b9aa8d;}
+.sr-menu :is(.segmented,.controls-tabs) button,
+.sr-menu :is(.multiplayer-character-picker,.multiplayer-course-picker) button {
+  min-height:44px;border:2px solid var(--sr-wood-dark);border-radius:10px;background:var(--sr-paper);color:var(--sr-ink);font-family:var(--sr-display);box-shadow:0 3px 0 var(--sr-wood-dark);
+}
+.sr-menu :is(.segmented,.controls-tabs) button.active,
+.sr-menu :is(.multiplayer-character-picker,.multiplayer-course-picker) button.selected {background:var(--sr-pine);color:var(--sr-snow);}
+.sr-menu :is(button,input):is(:focus-visible,.gamepad-focus) {outline:3px solid var(--sr-pine);outline-offset:4px;}
+.sr-menu button:disabled {opacity:.48;cursor:not-allowed;}
+.sr-menu input:not([type=range]) {border:2px solid #a89b82;border-radius:10px;background:var(--sr-snow);color:var(--sr-ink);font-family:var(--sr-body);box-shadow:inset 0 2px 3px #20334812;min-height:48px;}
+.sr-menu input[type=range] {accent-color:var(--sr-pine);min-height:44px;}
+.sr-menu :is(.room-summary,.multiplayer-players,.multiplayer-options,.keyboard-guide article,.control-callout,.result-stats > div) {border-color:#c9b692;border-radius:10px;background:var(--sr-paper);box-shadow:none;}
+.sr-menu .result-board {background:var(--sr-paper);}
+.sr-menu .result-standings li {border-radius:10px;border-color:#c9b692;}
+.sr-menu .result-standings li:first-child {background:var(--sr-gold);}
+.sr-menu :is(.multiplayer-feedback,.multiplayer-connection) {font-family:var(--sr-body);}
+@media(max-height:600px) {
+  .sr-menu:is(.modal,.campaign-screen,.multiplayer-screen,.results),.sr-menu .character-head > div:nth-child(2) {border-width:6px;border-radius:16px;}
+  .sr-menu:is(.modal,.campaign-screen,.multiplayer-screen) {max-height:calc(100dvh - 24px);background-size:100% 100px,auto;background-position:center -48px,center;}
+  .sr-menu .sr-button {min-height:44px;padding:8px 12px;font-size:17px;}
+  .sr-menu .sr-button--quiet {font-size:15px;}
+  .sr-menu .character-head > div:nth-child(2) {padding:5px 14px;}
+  .sr-menu .multiplayer-entry {margin-top:16px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .sr-menu *, .sr-menu *::before,.sr-menu *::after {animation:none!important;transition:none!important;}
+}

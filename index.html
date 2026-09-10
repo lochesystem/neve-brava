@@ -133,10 +133,10 @@
         </div>
       </section>
 
-      <section id="multiplayer-screen" class="screen multiplayer-screen hidden">
+      <section id="multiplayer-screen" class="sr-menu screen multiplayer-screen hidden">
         <header class="multiplayer-head">
           <div><p class="eyebrow">CORRIDA ONLINE</p><h2>Multiplayer</h2><p>Encontre adversários ou convide amigos com um código.</p></div>
-          <button id="multiplayer-back-button" class="secondary focusable">← VOLTAR</button>
+          <button id="multiplayer-back-button" class="secondary focusable sr-button sr-button--quiet">← VOLTAR</button>
         </header>
 
         <div id="multiplayer-entry" class="multiplayer-entry">
@@ -145,19 +145,19 @@
             <input id="multiplayer-name" class="focusable" maxlength="16" autocomplete="nickname" value="PILOTO" />
           </div>
           <div class="multiplayer-entry-actions">
-            <button id="quick-match-button" class="primary focusable"><span>⚡</span> PARTIDA RÁPIDA</button>
-            <button id="create-room-button" class="secondary focusable"><span>＋</span> CRIAR SALA</button>
+            <button id="quick-match-button" class="primary focusable sr-button sr-button--primary"><span>⚡</span> PARTIDA RÁPIDA</button>
+            <button id="create-room-button" class="secondary focusable sr-button sr-button--quiet"><span>＋</span> CRIAR SALA</button>
           </div>
           <div class="multiplayer-join">
             <label for="room-code-input">ENTRAR COM CÓDIGO</label>
-            <div><input id="room-code-input" class="focusable" maxlength="4" inputmode="text" autocomplete="off" placeholder="ABCD" /><button id="join-room-button" class="secondary focusable">ENTRAR</button></div>
+            <div><input id="room-code-input" class="focusable" maxlength="4" inputmode="text" autocomplete="off" placeholder="ABCD" /><button id="join-room-button" class="secondary focusable sr-button sr-button--quiet">ENTRAR</button></div>
           </div>
           <p class="multiplayer-note">Partidas usam de 2 a 4 jogadores. As vagas restantes são preenchidas pela IA.</p>
         </div>
 
         <div id="multiplayer-room" class="multiplayer-room hidden">
           <div class="room-summary">
-            <span>SALA</span><strong id="multiplayer-room-code">----</strong><button id="copy-room-code-button" class="secondary focusable">COPIAR CÓDIGO</button>
+            <span>SALA</span><strong id="multiplayer-room-code">----</strong><button id="copy-room-code-button" class="secondary focusable sr-button sr-button--quiet">COPIAR CÓDIGO</button>
             <small id="multiplayer-room-status">AGUARDANDO PILOTOS</small>
           </div>
           <div class="multiplayer-columns">
@@ -180,19 +180,19 @@
             </div>
           </div>
           <div class="multiplayer-room-actions">
-            <button id="leave-room-button" class="secondary focusable">SAIR DA SALA</button>
-            <button id="ready-button" class="primary focusable">✕ ESTOU PRONTO</button>
-            <button id="start-multiplayer-button" class="primary focusable hidden">✕ INICIAR CORRIDA</button>
+            <button id="leave-room-button" class="secondary focusable sr-button sr-button--quiet">SAIR DA SALA</button>
+            <button id="ready-button" class="primary focusable sr-button sr-button--primary">✕ ESTOU PRONTO</button>
+            <button id="start-multiplayer-button" class="primary focusable hidden sr-button sr-button--primary">✕ INICIAR CORRIDA</button>
           </div>
         </div>
         <p id="multiplayer-feedback" class="multiplayer-feedback" aria-live="polite"></p>
         <span id="multiplayer-connection" class="multiplayer-connection">CONECTANDO…</span>
       </section>
 
-      <section id="campaign-screen" class="screen campaign-screen hidden">
+      <section id="campaign-screen" class="sr-menu screen campaign-screen hidden">
         <header class="campaign-head">
           <div><p class="eyebrow">MODO CAMPANHA</p><h2>Mapa da montanha</h2><p>Escolha uma etapa. Cada traçado usa curvas, relevo e obstáculos próprios.</p></div>
-          <button id="campaign-back-button" class="secondary focusable">← VOLTAR</button>
+          <button id="campaign-back-button" class="secondary focusable sr-button sr-button--quiet">← VOLTAR</button>
         </header>
         <div class="track-showcase">
           <canvas id="track-preview-canvas" class="track-preview-canvas" aria-label="Maquete tridimensional da pista selecionada"></canvas>
@@ -211,13 +211,13 @@
         <div id="track-grid" class="track-grid"></div>
         <div class="campaign-footer">
           <div><small>ETAPA SELECIONADA</small><b id="selected-track-name">Vale Bravo</b><span id="selected-track-copy">A linha de abertura</span></div>
-          <button id="start-button" class="primary focusable" disabled><span>✕</span> COMEÇAR ETAPA</button>
+          <button id="start-button" class="primary focusable sr-button sr-button--primary" disabled><span>✕</span> COMEÇAR ETAPA</button>
         </div>
       </section>
 
-      <section id="character-screen" class="screen character-screen hidden">
+      <section id="character-screen" class="sr-menu screen character-screen hidden">
         <header class="character-head">
-          <button id="character-back-button" class="secondary focusable">← PISTAS</button>
+          <button id="character-back-button" class="secondary focusable sr-button sr-button--quiet">← PISTAS</button>
           <div><p class="eyebrow">ESCALAÇÃO DA ETAPA</p><h2>Escolha seu piloto</h2><p id="character-course">Vale Bravo · ETAPA 01</p></div>
           <div class="player-flag"><b>1P</b><span id="selected-character-name">—</span></div>
         </header>
@@ -227,21 +227,21 @@
           <button class="character-card yeti focusable" data-character="yeti" type="button"><i>1P</i><img class="character-portrait" src="%BASE_URL%images/characters/yeti.png" alt="" /><span class="character-card-copy"><strong>YETI</strong><small>Força bruta na neve</small></span></button>
           <button class="character-card giru focusable" data-character="giru" type="button"><i>1P</i><img class="character-portrait" src="%BASE_URL%images/characters/giru-v2.png" alt="" /><span class="character-card-copy"><strong>GIRU</strong><small>Rainha da nevasca</small></span></button>
         </div>
-        <button id="character-confirm-button" class="primary character-confirm focusable" disabled><span>✕</span> ESCOLHA UM PILOTO</button>
+        <button id="character-confirm-button" class="primary character-confirm focusable sr-button sr-button--primary" disabled><span>✕</span> ESCOLHA UM PILOTO</button>
       </section>
 
-      <section id="pause-screen" class="screen modal hidden">
+      <section id="pause-screen" class="sr-menu screen modal hidden">
         <p class="eyebrow">A MONTANHA ESPERA</p>
         <h2 id="pause-title">Pausado</h2>
         <p id="pause-copy">Respire. A linha continua logo ali.</p>
         <div class="menu-actions">
-          <button id="resume-button" class="primary focusable"><span>✕</span> CONTINUAR</button>
-          <button id="pause-settings-button" class="secondary focusable">CONFIGURAÇÕES</button>
-          <button id="quit-button" class="secondary focusable">VOLTAR AO INÍCIO</button>
+          <button id="resume-button" class="primary focusable sr-button sr-button--primary"><span>✕</span> CONTINUAR</button>
+          <button id="pause-settings-button" class="secondary focusable sr-button sr-button--quiet">CONFIGURAÇÕES</button>
+          <button id="quit-button" class="secondary focusable sr-button sr-button--quiet">VOLTAR AO INÍCIO</button>
         </div>
       </section>
 
-      <section id="results-screen" class="screen results hidden">
+      <section id="results-screen" class="sr-menu screen results hidden">
         <div id="result-winner" class="result-winner snowman">
           <div class="winner-burst" aria-hidden="true"></div>
           <img id="result-winner-image" src="%BASE_URL%images/characters/snowman.png" alt="" />
@@ -258,14 +258,14 @@
             <div><small>QUEDAS</small><b id="result-crashes">0</b></div>
           </div>
           <div class="result-actions">
-            <button id="next-track-button" class="primary focusable"><span>✕</span> PRÓXIMA PISTA</button>
-            <button id="restart-button" class="secondary focusable">DESCER DE NOVO</button>
-            <button id="result-title-button" class="secondary focusable">MENU INICIAL</button>
+            <button id="next-track-button" class="primary focusable sr-button sr-button--primary"><span>✕</span> PRÓXIMA PISTA</button>
+            <button id="restart-button" class="secondary focusable sr-button sr-button--quiet">DESCER DE NOVO</button>
+            <button id="result-title-button" class="secondary focusable sr-button sr-button--quiet">MENU INICIAL</button>
           </div>
         </div>
       </section>
 
-      <section id="settings-screen" class="screen modal settings hidden">
+      <section id="settings-screen" class="sr-menu screen modal settings hidden">
         <p class="eyebrow">AJUSTE A PRANCHA</p>
         <h2>Configurações</h2>
         <div class="setting-row">
@@ -290,15 +290,15 @@
         </label>
         <div class="setting-row controls-setting">
           <div><b>Comandos</b><small>DualSense e teclado de desenvolvimento.</small></div>
-          <button id="controls-button" class="secondary focusable"><span>?</span> VER COMANDOS</button>
+          <button id="controls-button" class="secondary focusable sr-button sr-button--quiet"><span>?</span> VER COMANDOS</button>
         </div>
-        <button id="settings-back-button" class="primary focusable"><span>○</span> VOLTAR</button>
+        <button id="settings-back-button" class="primary focusable sr-button sr-button--primary"><span>○</span> VOLTAR</button>
       </section>
 
-      <section id="controls-screen" class="screen modal controls-screen hidden">
+      <section id="controls-screen" class="sr-menu screen modal controls-screen hidden">
         <header class="controls-head">
           <div><p class="eyebrow">GUIA DE PILOTAGEM</p><h2>Comandos</h2><p>Escolha seu equipamento e confira cada movimento.</p></div>
-          <button id="controls-back-button" class="secondary focusable">← CONFIGURAÇÕES</button>
+          <button id="controls-back-button" class="secondary focusable sr-button sr-button--quiet">← CONFIGURAÇÕES</button>
         </header>
         <div class="controls-tabs" role="tablist" aria-label="Tipo de controle">
           <button id="controls-dualsense-tab" class="focusable active" data-controls-tab="dualsense" role="tab" aria-selected="true">DUALSENSE</button>

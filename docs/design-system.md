@@ -30,6 +30,10 @@ Logo e hero existentes preservados. Molduras e superfícies em CSS; sem blur ou 
 
 Gerado com ferramenta integrada de imagens (não CLI). Prompt: “Single reusable UI decoration for a cozy stylized snowboarding videogame: one very wide horizontal strip of soft accumulated white snow resting on the top edge of an invisible rectangular wooden sign. Transparent background, snow only. Front orthographic view, rounded irregular snow clumps, slightly drooping ends, short soft drips. White highlights, pale icy blue shading, stylized 3D game render. Snow shape ratio 12:1, tight bounding box. No falling flakes, icicles, scenery, text or symbols. Clean alpha cutout.”
 
-## Próximas migrações
+## Menus migrados
+
+Campanha, seleção de piloto, multiplayer (entrada e sala), pausa, resultados, configurações e comandos usam `.sr-menu` e os botões `.sr-button`. A camada `src/ui/menu-screens.css` adapta os layouts existentes usando tokens Alpine Lodge; não altera HUD nem lógica de navegação. Cartões mantêm as imagens, a maquete e os estados de seleção. Paisagem compacta preserva alvos de 44 px, reduz molduras e permite rolagem em painéis curtos. Movimento reduzido desativa animações decorativas dos menus.
+
+## Manutenção
 
 Migrar menus individualmente, preservando IDs e `.focusable` usados pelo InputManager. Não alterar a ordem de navegação, regras de desbloqueio ou o fluxo multiplayer só para adequar a aparência. A página de componentes é independente e não inicializa WebGL/socket do jogo.
