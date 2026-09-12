@@ -8,7 +8,7 @@ export function createCourseStructures(): THREE.Group {
   function finishIce(geometry: THREE.BufferGeometry) {
     const flat=geometry.toNonIndexed(), count=flat.getAttribute("position").count, colors:number[]=[];
     for(let i=0;i<count;i++) {
-      const tint=new THREE.Color(0x91c9e2).multiplyScalar(.83 + .17*Math.sin(Math.floor(i/3)*2.399));
+      const tint=new THREE.Color(getActiveCourse().id==="pico-tempestade" ? 0xaaa0db : 0x91c9e2).multiplyScalar(.83 + .17*Math.sin(Math.floor(i/3)*2.399));
       colors.push(tint.r,tint.g,tint.b);
     }
     flat.setAttribute("color",new THREE.Float32BufferAttribute(colors,3)); flat.computeVertexNormals(); geometry.dispose();

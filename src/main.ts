@@ -1024,7 +1024,6 @@ function handleEvent(event: GameEvent): void {
   if (event.type === "SHIELD_BREAK") { input.pulse(.55, .8, 180); showToast("ESCUDO SALVOU!", "clean"); }
   if (event.type === "CRASH") {
     input.pulse(1, .7, 260);
-    showToast("TUMBOU!", "crash");
     playSnowmanVoice("hit");
     playGiruVoice("rage");
     playYetiVoice("rage");

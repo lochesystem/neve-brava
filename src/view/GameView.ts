@@ -3,6 +3,7 @@ import { COURSE_PANORAMAS } from "./coursePanoramas.ts";
 import { createCourseStructures } from "./courseStructures.ts";
 import { createDesertScenery, createDesertLodge } from "./desertScenery.ts";
 import { bridgeContactRotation, bridgeBoardClearance } from "./bridgeContact.ts";
+import { createFinaleScenery } from "./finaleScenery.ts";
 import { courseCeiling, courseWallX, isBridgeSurface } from "../core/course.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
@@ -2061,6 +2062,7 @@ export class GameView {
     this.world.add(createCourseStructures());
     if(desert)this.world.add(createDesertScenery());
     else this.createSnowfall();
+    if(getActiveCourse().id==="pico-tempestade")this.world.add(createFinaleScenery());
   }
 
   private updatePickupVisuals(state: RiderState): void {

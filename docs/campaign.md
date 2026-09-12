@@ -25,6 +25,18 @@ A maquete e minimapa mostram a bifurcação. O panorama reutiliza o do Cânion.
 
 ## Teste
 
+### Final: Pico Tempestade
+
+A etapa 06 mantém os 3,6 km e o desbloqueio já existentes, mas agora tem galeria
+violeta arqueada entre 800–1120 m (14 m de altura), quatro saltos naturais nos
+marcadores 540, 1270, 2140 e 3280 m, com alturas de 4, 6, 7 e 8 m.
+Três arcos de gelo com coroas douradas marcam o trecho final em 2890, 3060 e 3500 m.
+Seus suportes ficam fora da pista; não são novos obstáculos invisíveis.
+Os testes verificam aterrissagens alinhadas a 18, 40 e 58 m/s, além da suíte dos bots.
+O panorama noturno é preservado. Validação online permanece para uma etapa posterior.
+
+### Cânion
+
 Cânion Ferrugem tem 3,5 km nominais por volta: areia, formações de arenito,
 rochas e quatro rampas naturais. Não usa pinheiros, panorama nevado nem neve caindo.
 Entre 1120–1740 m, a rota principal faz um S sobre uma ponte de madeira e cordas;
