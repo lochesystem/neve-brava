@@ -8,6 +8,9 @@ import {
   RACE_LAPS,
   RAMPS,
   courseHeight,
+  touchesItemBox,
+  isForkSection,
+  courseWallX, courseCeiling, courseAdvanceScale,
   courseSlope,
   rampHeight,
   rampSurfaceElevation,
@@ -81,6 +84,8 @@ export type RiderState = {
   airTime: number;
   jumpCharge: number;
   landingAssist: number;
+  /** Extra impact tolerance earned by a designed ramp, not by a manual jump. */
+  rampImpactAllowance: number;
   recovering: number;
   tumbleTime: number;
   tumbleDirection: number;
@@ -134,6 +139,7 @@ export function createRider(): RiderState {
     airTime: 0,
     jumpCharge: 0,
     landingAssist: 0,
+    rampImpactAllowance: 0,
     recovering: 0,
     tumbleTime: 0,
     tumbleDirection: 1,
@@ -186,6 +192,7 @@ export function interpolateRider(previous: RiderState, current: RiderState, alph
 }
 
 function beginAir(state: RiderState, launch: number, ramp: boolean, events: GameEvent[]): void {
+  state.rampImpactAllowance = 0;
   state.grounded = false;
   state.verticalSpeed = launch;
   state.spin = 0;
@@ -217,6 +224,7 @@ function crash(state: RiderState, events: GameEvent[], obstacle?: string, force 
   state.lateralSpeed = 0;
   state.verticalSpeed = 0;
   state.grounded = false;
+  state.rampImpactAllowance = 0;
   events.push({ type: "CRASH", obstacle });
 }
 
@@ -263,12 +271,12 @@ export function applyRiderFreeze(state: RiderState): GameEvent[] {
   state.lateralSpeed = 0;
   state.grounded = true;
   state.verticalSpeed = 0;
-  state.y = courseHeight(state.s) + .46;
+  state.y = courseHeight(state.s, state.x) + .46;
   return events;
 }
 
 function updatePickups(state: RiderState, previousS: number, events: GameEvent[], racePosition: number, random: () => number): void {
-  const heightAboveSnow = state.y - courseHeight(state.s);
+  const heightAboveSnow = state.y - courseHeight(state.s, state.x);
   for (const coin of COINS) {
     if (state.collectedCoins.includes(coin.id) || !crossing(previousS, state.s + .9, coin.s)) continue;
     if (Math.abs(state.x - coin.x) > 1.25 || heightAboveSnow > 2.8) continue;
@@ -277,8 +285,7 @@ function updatePickups(state: RiderState, previousS: number, events: GameEvent[]
     events.push({ type: "COIN", value: coin.value, id: coin.id });
   }
   for (const box of ITEM_BOXES) {
-    if (state.collectedBoxes.includes(box.id) || !crossing(previousS, state.s + .9, box.s)) continue;
-    if (Math.abs(state.x - box.x) > box.radius + .72 || heightAboveSnow > box.height + .35) continue;
+    if (state.collectedBoxes.includes(box.id) || !touchesItemBox(state,previousS,box)) continue;
     state.collectedBoxes.push(box.id);
     const item: ItemKind = racePosition === 4 && random() < .4 ? "blizzard" : box.item;
     state.item = item;
@@ -296,12 +303,13 @@ function useItem(state: RiderState, events: GameEvent[]): void {
 }
 
 function land(state: RiderState, events: GameEvent[]): void {
-  const surfaceVerticalSpeed = courseSlope(state.s) * state.speed;
+  const surfaceVerticalSpeed = courseSlope(state.s, state.x) * state.speed;
   const impact = Math.max(0, surfaceVerticalSpeed - state.verticalSpeed);
-  const grade = gradeLanding(state.spin, state.flip, impact, state.landingAssist > 0.4);
+  const grade = gradeLanding(state.spin, state.flip, Math.max(0, impact - state.rampImpactAllowance), state.landingAssist > 0.4);
+  state.rampImpactAllowance = 0;
   const trick = evaluateTrick(state.spin, state.flip, state.grabTime, grade);
   state.grounded = true;
-  state.y = courseHeight(state.s) + 0.46;
+  state.y = courseHeight(state.s, state.x) + 0.46;
   state.verticalSpeed = 0;
   state.heading = wrapAngle(state.spin);
   state.spin = state.heading;
@@ -338,7 +346,7 @@ function updateObstacles(state: RiderState, previousS: number, events: GameEvent
     touchedObstacles.add(obstacle.id);
     const lateralDistance = Math.abs(state.x - obstacle.x);
     const collisionDistance = obstacle.radius + 0.7;
-    const lowEnough = state.y - courseHeight(state.s) < obstacle.height + 0.35;
+    const lowEnough = state.y - courseHeight(state.s, state.x) < obstacle.height + 0.35;
     if (lateralDistance < collisionDistance && lowEnough) {
       crash(state, events, obstacle.kind);
     } else if (lateralDistance < collisionDistance + 2.15 && lowEnough) {
@@ -358,8 +366,14 @@ function updateRamps(state: RiderState, previousS: number, events: GameEvent[]):
     if (usedRamps.has(ramp.id) || !crossing(previousS, state.s, ramp.s)) continue;
     usedRamps.add(ramp.id);
     if (Math.abs(state.x - ramp.x) <= ramp.width / 2 + 0.7) {
-      state.y = courseHeight(ramp.s) + rampHeight(ramp) + 0.46;
+      state.y = courseHeight(ramp.s, state.x) + rampHeight(ramp) + 0.46;
       beginAir(state, ramp.launch + state.speed * 0.045, true, events);
+      // Relative takeoff velocity + the lip's height predict the normal impact
+      // on a continuation of this slope. Only excess impact is discounted;
+      // rotation grading and obstacle collisions remain unchanged.
+      const surfaceSpeed = courseSlope(ramp.s, state.x) * state.speed * courseAdvanceScale(ramp.s, state.lateralSpeed, state.speed, state.x);
+      const expectedImpact = Math.sqrt((state.verticalSpeed - surfaceSpeed) ** 2 + 2 * 18.5 * rampHeight(ramp));
+      state.rampImpactAllowance = Math.max(0, expectedImpact - 18);
     }
   }
 }
@@ -367,7 +381,7 @@ function updateRamps(state: RiderState, previousS: number, events: GameEvent[]):
 function restoreAfterCrash(state: RiderState): void {
   state.s = Math.max(0, state.lastSafeS);
   state.x = state.lastSafeX;
-  state.y = courseHeight(state.s) + 0.46;
+  state.y = courseHeight(state.s, state.x) + 0.46;
   state.speed = Math.max(22, state.speed);
   state.lateralSpeed = 0;
   state.grounded = true;
@@ -381,6 +395,7 @@ function restoreAfterCrash(state: RiderState): void {
 }
 
 function beginNextLap(state: RiderState): void {
+  state.rampImpactAllowance = 0;
   touchedObstacles.clear();
   usedRamps.clear();
   state.lap += 1;
@@ -439,7 +454,7 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
     state.lateralSpeed = 0;
     state.grounded = true;
     state.verticalSpeed = 0;
-    state.y = courseHeight(state.s) + .46;
+    state.y = courseHeight(state.s, state.x) + .46;
     return events;
   }
 
@@ -449,14 +464,14 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
     const progress = clamp(state.tumbleTime / CRASH_RECOVERY_TIME, 0, 1);
     const momentum = 1 - progress;
     state.s += state.speed * (0.2 + momentum * 0.1) * step;
-    state.x = clamp(
+    state.x = courseWallX(state.s, clamp(
       state.x + state.tumbleDirection * 1.25 * momentum * step,
       -COURSE_HALF_WIDTH + 0.7,
       COURSE_HALF_WIDTH - 0.7,
-    );
+    ), state.x);
     state.speed = approach(state.speed, 14, 7 * step);
     const impactHop = progress < 0.18 ? Math.sin((progress / 0.18) * Math.PI) * 0.07 : 0;
-    state.y = courseHeight(state.s) + 0.46 + impactHop;
+    state.y = courseHeight(state.s, state.x) + 0.46 + impactHop;
     if (state.recovering <= 0) restoreAfterCrash(state);
     return events;
   }
@@ -510,18 +525,27 @@ export function updateRider(state: RiderState, intent: GameIntent, dt: number, r
     state.y += state.verticalSpeed * step;
   }
 
+  const previousX = state.x;
   state.x += state.lateralSpeed * step;
   if (Math.abs(state.x) > COURSE_HALF_WIDTH - 0.7) {
     state.x = clamp(state.x, -COURSE_HALF_WIDTH + 0.7, COURSE_HALF_WIDTH - 0.7);
     state.lateralSpeed *= -0.18;
     state.speed *= 0.985;
   }
-  state.s += state.speed * step;
+  state.s += state.speed * step * courseAdvanceScale(state.s, state.lateralSpeed, state.speed, state.x);
+  const wallX = courseWallX(state.s, state.x, previousX);
+  if (wallX !== state.x) {
+    state.x = wallX;
+    if(!isForkSection(state.s))crash(state, events, "ice-wall");
+    state.lateralSpeed = 0;
+  }
+  const ceiling = courseCeiling(state.s, state.x) - 2;
+  if (state.y > ceiling) { state.y = ceiling; state.verticalSpeed = Math.min(0, state.verticalSpeed); crash(state, events, "ice-ceiling"); }
 
-  if (state.grounded) state.y = courseHeight(state.s) + rampSurfaceElevation(state.s, state.x) + 0.46;
+  if (state.grounded) state.y = courseHeight(state.s, state.x) + rampSurfaceElevation(state.s, state.x) + 0.46;
   updateRamps(state, previousS, events);
-  if (!state.grounded && state.y <= courseHeight(state.s) + 0.46 && state.verticalSpeed < 0) land(state, events);
-  if (state.grounded) state.y = courseHeight(state.s) + rampSurfaceElevation(state.s, state.x) + 0.46;
+  if (!state.grounded && state.y <= courseHeight(state.s, state.x) + 0.46 && state.verticalSpeed < 0) land(state, events);
+  if (state.grounded) state.y = courseHeight(state.s, state.x) + rampSurfaceElevation(state.s, state.x) + 0.46;
   updatePickups(state, previousS, events, racePosition, random);
   updateObstacles(state, previousS, events);
 

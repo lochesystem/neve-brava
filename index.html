@@ -47,6 +47,7 @@
           </defs>
           <path class="map-shadow" id="course-map-shadow"></path>
           <path class="map-line" id="course-map-line"></path>
+          <path id="course-map-branch" fill="none" stroke="#ffe08a" stroke-width="4" stroke-linecap="round"></path>
           <circle class="map-start" cx="90" cy="24" r="5"></circle>
           <g id="course-map-rival" class="map-racer-marker"><circle class="marker-frame" r="13"></circle><image class="map-portrait" x="-12" y="-12" width="24" height="24" clip-path="url(#map-portrait-clip)" preserveAspectRatio="xMidYMid slice"></image></g>
           <g id="course-map-guy" class="map-racer-marker"><circle class="marker-frame" r="13"></circle><image class="map-portrait" x="-12" y="-12" width="24" height="24" clip-path="url(#map-portrait-clip)" preserveAspectRatio="xMidYMid slice"></image></g>
@@ -107,7 +108,7 @@
               <p class="eyebrow"> </p>
               <img class="title-logo" src="%BASE_URL%images/snow-rush-logo.png" alt="Snow Rush" />
               <h1><span>SNOW</span><strong>RUSH</strong></h1>
-              <p class="tagline">Quatro pilotos. Quatro montanhas.<br />Uma corrida até o limite.</p>
+              <p class="tagline">Quatro pilotos. Uma grande jornada.<br />Uma corrida até o limite.</p>
             </div>
           </div>
           <div class="title-panel sr-panel sr-panel--snow">
@@ -175,7 +176,9 @@
                 <button class="focusable selected" data-multiplayer-course="vale-bravo">01</button>
                 <button class="focusable" data-multiplayer-course="canion-cristal">02</button>
                 <button class="focusable" data-multiplayer-course="bosque-torto">03</button>
-                <button class="focusable" data-multiplayer-course="pico-tempestade">04</button>
+                <button class="focusable" data-multiplayer-course="passagem-geleira">04</button>
+                <button class="focusable" data-multiplayer-course="canion-ferrugem">05</button>
+                <button class="focusable" data-multiplayer-course="pico-tempestade">06</button>
               </div>
             </div>
           </div>
@@ -191,7 +194,7 @@
 
       <section id="campaign-screen" class="sr-menu screen campaign-screen hidden">
         <header class="campaign-head">
-          <div><p class="eyebrow">MODO CAMPANHA</p><h2>Mapa da montanha</h2><p>Escolha uma etapa. Cada traçado usa curvas, relevo e obstáculos próprios.</p></div>
+          <div><p class="eyebrow">MODO CAMPANHA</p><h2>Mapa da montanha</h2><p>Conquiste o pódio para abrir a próxima etapa. Seu progresso fica salvo neste navegador.</p></div>
           <button id="campaign-back-button" class="secondary focusable sr-button sr-button--quiet">← VOLTAR</button>
         </header>
         <div class="track-showcase">

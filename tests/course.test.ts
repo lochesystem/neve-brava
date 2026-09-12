@@ -36,11 +36,11 @@ describe("pista", () => {
     expect(scenery.every(obstacle => Math.abs(obstacle.x) > COURSE_HALF_WIDTH + 2)).toBe(true);
   });
 
-  it("mantém as quatro pistas da campanha válidas, distintas e jogáveis", () => {
-    expect(COURSES).toHaveLength(4);
+  it("mantém as seis pistas da campanha válidas, distintas e jogáveis", () => {
+    expect(COURSES).toHaveLength(6);
     expect(validateAllCourses()).toEqual(Object.fromEntries(COURSES.map(course => [course.id, []])));
-    expect(new Set(COURSES.map(course => course.name)).size).toBe(4);
-    expect(new Set(COURSES.map(course => course.length)).size).toBe(4);
+    expect(new Set(COURSES.map(course => course.name)).size).toBe(6);
+    expect(new Set(COURSES.map(course => course.length)).size).toBe(6);
     for (const course of COURSES) {
       setActiveCourse(course.id);
       expect(RAMPS).toHaveLength(4);

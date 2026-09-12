@@ -3,7 +3,9 @@ import { clamp } from "./math.ts";
 export type ObstacleKind = "tree" | "rock" | "fence" | "ice" | "log" | "snowball";
 export type ItemKind = "wind" | "turbo" | "shield" | "blizzard";
 export type Obstacle = { id: string; kind: ObstacleKind; s: number; x: number; radius: number; height: number; accent?: boolean; decorative?: boolean };
-export type Ramp = { id: string; s: number; x: number; width: number; launch: number; built: boolean };
+export type Ramp = { id: string; s: number; x: number; width: number; launch: number; built: boolean; natural?: boolean; length?: number; height?: number };
+export type Tunnel = { start: number; end: number; halfWidth: number; height: number };
+export type Fork = { start: number; end: number; left: number; right: number; detour?: number; bridge?: boolean };
 export type CoinPickup = { id: string; s: number; x: number; value: 100 };
 export type ItemBox = { id: string; s: number; x: number; item: ItemKind; radius: number; height: number };
 export type CourseSection = { start: number; end: number; name: string; color: string };
@@ -16,6 +18,8 @@ export type CourseDefinition = {
   id: string; order: number; name: string; subtitle: string; description: string; difficulty: string;
   length: number; halfWidth: number; startHeight: number; descent: number; terrainRoughness: number; scenerySeed: number;
   curveWaves: Wave[]; heightWaves: Wave[]; sections: CourseSection[]; ramps: Ramp[]; obstacles: Obstacle[];
+  tunnels?: Tunnel[]; forks?: Fork[];
+  biome?: "desert";
 };
 
 const hazard = (id: string, kind: ObstacleKind, s: number, x: number, radius: number, height: number, accent = false): Obstacle => ({ id, kind, s, x, radius, height, accent });
@@ -118,6 +122,59 @@ export const COURSES: CourseDefinition[] = [
   },
 ];
 
+COURSES.splice(3, 0, {
+  id: "passagem-geleira", order: 4, name: "Passagem da Geleira", subtitle: "Por dentro da montanha", difficulty: "AVANÇADA",
+  description: "Túnel de gelo, bifurcação com atalho estreito à esquerda e saltos na própria neve.",
+  length: 3300, halfWidth: 20, startHeight: 130, descent: .115, terrainRoughness: .6, scenerySeed: 0x47454c4f,
+  curveWaves: [{ amplitude: 36, frequency: .004, phase: 0 }, { amplitude: 12, frequency: .009, phase: .5 }],
+  heightWaves: [{ amplitude: 2, frequency: .014, phase: 0 }],
+  sections: [
+    { start: 0, end: 450, name: "Entrada da geleira", color: "#9fe7ff" },
+    { start: 450, end: 800, name: "Túnel azul", color: "#77b6dd" },
+    { start: 800, end: 1300, name: "Escolha sua linha", color: "#ffcf5a" },
+    { start: 1300, end: 2200, name: "Cornijas de neve", color: "#d89dff" },
+    { start: 2200, end: 3300, name: "Salto da geleira", color: "#57c8ad" },
+  ],
+  tunnels: [{ start: 470, end: 730, halfWidth: 17, height: 11 }],
+  forks: [{ start: 910, end: 1230, left: -6, right: -4, detour: 130 }],
+  ramps: [
+    { ...jump("lip-a", 350, 0, 32, 11), natural: true, length: 38, height: 4 },
+    { ...jump("lip-b", 1510, 0, 32, 14), natural: true, length: 48, height: 6 },
+    { ...jump("lip-c", 2100, 0, 32, 13), natural: true, length: 42, height: 5 },
+    { ...jump("lip-final", 2870, 0, 32, 16), natural: true, length: 55, height: 7 },
+  ],
+  obstacles: [hazard("entry-ice", "ice", 175, 8, 2, 4),
+    hazard("shortcut-log", "log", 1090, -14, 2.6, 1.2),
+    hazard("main-a", "ice", 980, 5, 3.5, 4), hazard("main-b", "ice", 1060, 15, 3.5, 4), hazard("main-c", "ice", 1150, 5, 3.5, 4),
+    hazard("exit-rock", "rock", 1690, -10, 2, 3), hazard("exit-ice", "ice", 2450, 7, 2, 4), hazard("last-rock", "rock", 3100, -7, 2, 3)],
+});
+COURSES.splice(4,0,{
+  id:"canion-ferrugem",order:5,name:"Cânion Ferrugem",subtitle:"Por cima ou por baixo",difficulty:"AVANÇADA",biome:"desert",
+  description:"Arenito vermelho, ponte suspensa sobre o leito seco e um atalho por baixo da travessia.",
+  length:3500,halfWidth:20,startHeight:155,descent:.112,terrainRoughness:.4,scenerySeed:0x53414e44,
+  curveWaves:[{amplitude:45,frequency:.0035,phase:0},{amplitude:13,frequency:.009,phase:.6}],
+  heightWaves:[{amplitude:1.4,frequency:.012,phase:0}],
+  sections:[
+    {start:0,end:550,name:"Portas de arenito",color:"#e6a85d"},
+    {start:550,end:1100,name:"Curvas da garganta",color:"#df8054"},
+    {start:1100,end:1800,name:"Travessia suspensa",color:"#ffcc67"},
+    {start:1800,end:2600,name:"Leito do vento",color:"#c79d76"},
+    {start:2600,end:3500,name:"Salto do poente",color:"#ffad6b"}],
+  forks:[{start:1120,end:1740,left:-6,right:-4,detour:155,bridge:true}],
+  ramps:[
+    {...jump("dune-a",430,0,30,10),natural:true,length:35,height:4},
+    {...jump("ledge-b",950,-4,24,12),natural:true,length:40,height:5},
+    {...jump("wash-c",2270,0,30,13),natural:true,length:45,height:6},
+    {...jump("sunset",3180,0,32,15),natural:true,length:50,height:7}],
+  obstacles:[hazard("rock-a","rock",190,-7,2.3,3),hazard("rock-b","rock",285,8,2.7,3.4),
+    hazard("gorge-a","rock",630,6,2.8,3),hazard("gorge-b","rock",750,-6,2.7,3),
+    hazard("gorge-c","rock",835,9,2.3,3),hazard("shortcut-a","rock",1280,-14,2.1,2.4),
+    hazard("shortcut-b","rock",1620,-11,1.7,2.5),hazard("wash-a","rock",1940,5,3,3.5),
+    hazard("wash-b","rock",2070,-8,2.5,3),hazard("wash-c","rock",2460,9,2.5,3),
+    hazard("mesa-a","rock",2710,-7,2.8,4),hazard("mesa-b","rock",2920,7,2.8,3.5),hazard("last","rock",3370,-9,2,3)]
+});
+COURSES.forEach((course, index) => { course.order = index + 1; });
+
 let activeCourse = COURSES[0];
 export let COURSE_LENGTH = activeCourse.length;
 export let COURSE_HALF_WIDTH = activeCourse.halfWidth;
@@ -148,7 +205,9 @@ function decorateSafeEdges(course: CourseDefinition): Obstacle[] {
   for (let s = 35; s < course.length - 35; s += 13 + random() * 8) {
     for (const side of [-1, 1]) for (let layer = 0; layer < 2; layer += 1) {
       const x = side * (course.halfWidth + 4 + layer * 16 + random() * 26);
-      const kind: ObstacleKind = random() > .12 ? "tree" : "rock";
+      // There is no terrain beside the upper deck to support edge props.
+      if (course.forks?.some(f => f.bridge && s >= f.start - 20 && s <= f.end + 20)) continue;
+      const kind: ObstacleKind = course.biome === "desert" ? "rock" : random() > .12 ? "tree" : "rock";
       result.push({ id: `${course.id}-edge-${result.length}`, kind, s: s + (random() - .5) * 15, x,
         radius: kind === "tree" ? 1.1 : 1.45, height: kind === "tree" ? 5 + random() * 4.5 : 2.2 + random(), decorative: true });
     }
@@ -159,7 +218,7 @@ function decorateSafeEdges(course: CourseDefinition): Obstacle[] {
 function safePickupX(course: CourseDefinition, s: number, preferred: number, radius: number): number {
   const edge = course.halfWidth - radius - 1.4;
   const candidates = [preferred, 0, -preferred, edge * .55, -edge * .55].map(value => clamp(value, -edge, edge));
-  return candidates.find(candidate => course.obstacles.every(obstacle =>
+  return candidates.find(candidate => !course.forks?.some(fork => s >= fork.start - 20 && s <= fork.end + 20 && candidate > fork.left - radius - 1 && candidate < fork.right + radius + 1) && course.obstacles.every(obstacle =>
     Math.abs(obstacle.s - s) > 16 || Math.abs(obstacle.x - candidate) > obstacle.radius + radius + 1.4,
   ) && course.ramps.every(ramp =>
     Math.abs(ramp.s - s) > 24 || Math.abs(ramp.x - candidate) > ramp.width / 2 + radius + 1,
@@ -226,8 +285,8 @@ export function setActiveCourse(id: string): CourseDefinition {
 export function getActiveCourse(): CourseDefinition { return activeCourse; }
 activate(activeCourse);
 
-export function rampLength(item: Ramp): number { return item.built ? 9.5 : 8.5; }
-export function rampHeight(item: Ramp): number { return item.built ? 2.35 : 1.8; }
+export function rampLength(item: Ramp): number { return item.length ?? (item.built ? 9.5 : 8.5); }
+export function rampHeight(item: Ramp): number { return item.height ?? (item.built ? 2.35 : 1.8); }
 export function obstacleConflictsWithRamp(obstacle: Obstacle, ramp: Ramp): boolean {
   const approachStart = ramp.s - rampLength(ramp) - 12;
   const landingEnd = ramp.s + 24;
@@ -244,35 +303,109 @@ export function rampSurfaceElevation(s: number, lateral: number): number {
   return 0;
 }
 
-export function courseHeightFor(course: CourseDefinition, s: number): number {
+export function courseHeightFor(course: CourseDefinition, s: number, lateral = 0): number {
   const progress = clamp(s, 0, course.length);
   return course.startHeight - progress * course.descent
-    + course.heightWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
+    + course.heightWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0)
+    + routeHeightFor(course,s,lateral);
 }
-export function courseHeight(s: number): number { return courseHeightFor(activeCourse, s); }
-export function courseSlope(s: number): number {
+export function courseHeight(s: number, lateral = 0): number { return courseHeightFor(activeCourse, s, lateral); }
+export function isBridgeSurface(s:number,x:number):boolean {
+  return !!activeCourse.forks?.some(f=>f.bridge&&s>=f.start&&s<=f.end&&x>=f.right);
+}
+/** Pickups on curved, layered routes use the visible world-space contact, not a single s-plane. */
+export function touchesItemBox(state:{s:number;x:number;y:number},previousS:number,box:ItemBox):boolean {
+  const fork=activeCourse.forks?.find(f=>box.s>=f.start&&box.s<=f.end);
+  if(!fork)return previousS<box.s&&state.s+.9>=box.s&&Math.abs(state.x-box.x)<=box.radius+.72&&state.y-courseHeight(state.s,state.x)<=box.height+.35;
+  if(box.s<previousS-6||box.s>state.s+6)return false;
+  const middle=(fork.left+fork.right)/2;
+  if((state.x<middle)!==(box.x<middle))return false;
+  const a=courseWorldPoint(previousS,state.x),b=courseWorldPoint(state.s,state.x),p=courseWorldPoint(box.s,box.x);
+  const dx=b.x-a.x,dz=b.z-a.z;
+  const t=clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/Math.max(.000001,dx*dx+dz*dz),0,1);
+  const height=state.y-courseTerrainHeight(box.s,box.x);
+  return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz)<=box.radius+.9&&height>=-1&&height<=box.height+.35;
+}
+export function courseSlope(s: number, lateral = 0): number {
   const epsilon = .5;
-  return (courseHeight(s + epsilon) - courseHeight(s - epsilon)) / (epsilon * 2);
+  return (courseHeight(s + epsilon,lateral) - courseHeight(s - epsilon,lateral)) / (epsilon * 2);
 }
-export function courseCenterFor(course: CourseDefinition, s: number): number {
+export function routeHeightFor(course: CourseDefinition,s:number,lateral=0):number {
+  const fork=course.forks?.find(f=>f.bridge && s>=f.start && s<=f.end);
+  if(!fork)return 0;
+  const side=clamp((lateral-fork.left)/(fork.right-fork.left),0,1);
+  const t=(s-fork.start)/(fork.end-fork.start);
+  const approach=clamp(Math.min(t,1-t)/.18,0,1);
+  const elevation=approach*approach*(3-2*approach);
+  return (-15+side*23)*elevation;
+}
+function baseCenterFor(course: CourseDefinition, s: number): number {
   const progress = clamp(s, 0, course.length);
   return course.curveWaves.reduce((sum, wave) => sum + Math.sin(progress * wave.frequency + wave.phase) * wave.amplitude, 0);
 }
+export function routeOffsetFor(course: CourseDefinition, s: number, lateral = 0): number {
+  const fork = course.forks?.find(f => s >= f.start && s <= f.end);
+  if (!fork) return 0;
+  const progress = (s-fork.start)/(fork.end-fork.start);
+  const side = clamp((lateral-fork.left)/(fork.right-fork.left),0,1);
+  const exit=clamp(Math.min(progress,1-progress)/.22,0,1);
+  const branch=exit*exit*(3-2*exit);
+  // The optional route visibly peels left, while x=0 remains on the broad main route.
+  return (fork.detour ?? 0)*Math.sin(Math.PI*progress)**2*side*(fork.bridge ? Math.sin(2*Math.PI*progress) : 1)
+    - 35*branch*(1-side);
+}
+export function courseCenterFor(course: CourseDefinition, s: number): number {
+  return baseCenterFor(course,s)+routeOffsetFor(course,s);
+}
 export function courseCenterX(s: number): number { return courseCenterFor(activeCourse, s); }
-export function courseFrame(s: number): { tx: number; tz: number; nx: number; nz: number; heading: number } {
-  const epsilon = .5, dx = (courseCenterX(s + epsilon) - courseCenterX(s - epsilon)) / (epsilon * 2), length = Math.hypot(dx, 1);
-  const tx = dx / length, tz = -1 / length, nx = -tz, nz = tx;
+export function courseFrame(s: number, lateral = 0): { tx: number; tz: number; nx: number; nz: number; heading: number } {
+  const a=courseWorldPoint(s-.5,lateral), b=courseWorldPoint(s+.5,lateral), dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+  const tx = dx / length, tz = dz / length, nx = -tz, nz = tx;
   return { tx, tz, nx, nz, heading: Math.atan2(-tx, -tz) };
 }
 export function courseWorldPoint(s: number, lateral = 0): { x: number; z: number } {
-  const frame = courseFrame(s);
-  return { x: courseCenterX(s) + frame.nx * lateral, z: -s + frame.nz * lateral };
+  return courseWorldPointFor(activeCourse,s,lateral);
+}
+export function courseWorldPointFor(course: CourseDefinition,s: number,lateral=0): {x:number;z:number} {
+  const dx=baseCenterFor(course,s+.5)-baseCenterFor(course,s-.5), length=Math.hypot(dx,1);
+  return {x:baseCenterFor(course,s)+routeOffsetFor(course,s,lateral)+lateral/length,z:-s+dx/length*lateral};
 }
 export function courseTerrainHeight(s: number, lateral: number): number {
   const edge = Math.max(0, Math.abs(lateral) - COURSE_HALF_WIDTH);
   const mountain = edge * .16 + Math.sin(s * .021 + lateral * .12) * Math.min(2.8, edge * .045);
   const pisteCrown = -Math.pow(Math.abs(lateral) / COURSE_HALF_WIDTH, 1.7) * (.3 + activeCourse.terrainRoughness * .22);
-  return courseHeight(s) + pisteCrown + mountain;
+  const naturalRamp = RAMPS.some(ramp => ramp.natural && s >= ramp.s - rampLength(ramp) && s <= ramp.s && Math.abs(lateral - ramp.x) <= ramp.width / 2 + .7);
+  return courseHeight(s,lateral) + (naturalRamp ? rampSurfaceElevation(s, lateral) : activeCourse.biome === "desert" && edge===0 ? 0 : pisteCrown + mountain);
+}
+
+/** Shared by client and server bots: physical walls cannot be crossed sideways. */
+export function isForkSection(s:number):boolean {
+  return !!activeCourse.forks?.some(f=>s>=f.start&&s<=f.end);
+}
+export function courseWallX(s: number, x: number, previousX = x): number {
+  let result = x;
+  for (const tunnel of activeCourse.tunnels ?? []) if (s >= tunnel.start && s <= tunnel.end)
+    result = clamp(result, -tunnel.halfWidth + .8, tunnel.halfWidth - .8);
+  for (const fork of activeCourse.forks ?? []) if (s >= fork.start && s <= fork.end) {
+    const middle = (fork.left + fork.right) / 2;
+    result = previousX < middle ? Math.min(result, fork.left - .8) : Math.max(result, fork.right + .8);
+  }
+  return result;
+}
+export function courseCeiling(s: number, lateral = 0): number {
+  const tunnel = activeCourse.tunnels?.find(item => s >= item.start && s <= item.end);
+  const bridge=activeCourse.forks?.find(f=>f.bridge&&s>=f.start&&s<=f.end&&lateral<f.left);
+  if(bridge){
+    const p=courseWorldPoint(s,lateral),a=courseWorldPoint(s,bridge.right),b=courseWorldPoint(s,COURSE_HALF_WIDTH);
+    if(p.x>=Math.min(a.x,b.x)-1&&p.x<=Math.max(a.x,b.x)+1)return courseHeight(s,bridge.right)-.4;
+  }
+  return tunnel ? courseHeight(s) + 3 + (tunnel.height-3)*Math.sqrt(Math.max(0,1-(lateral/tunnel.halfWidth)**2)) : Infinity;
+}
+/** New terrain uses physical distance; old tracks retain their established pace. */
+export function courseAdvanceScale(s: number, lateralSpeed: number, speed: number, lateral = 0): number {
+  if (!activeCourse.forks) return 1;
+  const a=courseWorldPoint(s-.5,lateral),b=courseWorldPoint(s+.5,lateral);
+  return 1 / Math.sqrt((b.x-a.x)**2+(b.z-a.z)**2+Math.pow(lateralSpeed/Math.max(1,speed),2));
 }
 export function sectionAt(s: number): CourseSection {
   return SECTIONS.find(section => s >= section.start && s < section.end) ?? SECTIONS[SECTIONS.length - 1];

@@ -61,3 +61,30 @@
 @media(prefers-reduced-motion:reduce) {
   .sr-menu *, .sr-menu *::before,.sr-menu *::after {animation:none!important;transition:none!important;}
 }
+.sr-menu #track-grid { grid-template-columns: 2fr 3fr 1fr; }
+.sr-menu .track-showcase { height: clamp(180px, 37vh, 330px); }
+.campaign-group { min-width: 0; }
+.campaign-chapter { margin: 0 0 5px; color: var(--sr-ink); font: 800 12px sans-serif; text-transform: uppercase; }
+.chapter-courses { display: flex; gap: 6px; }
+.chapter-courses .track-card { flex: 1; min-width: 0; }
+.chapter-courses .track-card:disabled { opacity: .5; cursor: default; }
+@media (max-height: 500px) {
+  .sr-menu.campaign-screen { padding: 12px 18px; }
+  .sr-menu .campaign-head h2 { font-size: 28px; margin-bottom: 2px; }
+  .sr-menu .campaign-head p { font-size: 10px; }
+  .sr-menu .track-showcase { height: 140px; min-height: 110px; margin: 8px 0; }
+  .sr-menu .track-showcase-copy { top: 10px; left: 14px; max-width: 230px; }
+  .sr-menu .track-showcase-copy strong { font-size: 25px; }
+  .sr-menu .track-showcase-copy span { font-size: 9px; }
+  .sr-menu .track-showcase-specs { bottom: 10px; padding: 6px; }
+  .sr-menu #track-grid { margin: 5px 0 9px; }
+  .sr-menu .track-card { min-height: 48px; padding: 5px; gap: 2px 5px; }
+  .sr-menu .track-card-index { font-size: 18px; }
+  .sr-menu .track-card > span strong { font-size: 13px; }
+  .sr-menu .track-card > em { font-size: 7px; }
+  .sr-menu .campaign-footer { padding-top: 5px; flex-direction: row; }
+  .sr-menu .campaign-footer > div { display: none; }
+  .sr-menu .campaign-footer button { margin: auto; width: 260px; min-height: 36px; padding: 5px 10px; }
+  .campaign-chapter { font-size: 9px; margin-bottom: 3px; }
+  .chapter-courses { gap: 3px; }
+}

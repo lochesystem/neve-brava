@@ -8,6 +8,9 @@ import {
   RACE_LAPS,
   RAMPS,
   courseHeight,
+  touchesItemBox,
+  isForkSection,
+  courseWallX, courseCeiling, courseAdvanceScale,
   getActiveCourse,
   raceProgress,
   rampHeight,
@@ -188,6 +191,15 @@ function lineRisk(state: RivalState, candidate: number, preferredLine: number): 
 }
 
 function chooseLine(state: RivalState, playerProgress: number, playerX: number): void {
+  const fork = getActiveCourse().forks?.find(item => state.s >= item.start - 85 && state.s <= item.end);
+  if (fork) {
+    // Commit before the divider. Different profiles/laps choose both routes;
+    // once inside, never steer through the solid island to chase a pickup.
+    const shortcut = state.s >= fork.start ? state.x < (fork.left + fork.right) / 2 : Math.sin(state.linePhase + state.lap * 1.7) > 0;
+    state.targetX = shortcut ? (fork.left - COURSE_HALF_WIDTH) / 2 : (fork.right + COURSE_HALF_WIDTH) / 2 + Math.sin((state.s - fork.start) * .038) * 5;
+    state.decisionTimer = .25;
+    return;
+  }
   const edge = COURSE_HALF_WIDTH - 2.2;
   const candidates = [-.78, -.52, -.26, 0, .26, .52, .78].map(value => value * edge);
   const raceGap = playerProgress - raceProgress(state.lap, state.s);
@@ -219,10 +231,8 @@ function obstacleCollision(state: RivalState): boolean {
 }
 
 function collectItemBoxes(state: RivalState, previousS: number, events: RivalEvent[], racePosition: number, random: () => number): void {
-  const heightAboveSnow = state.y - courseHeight(state.s);
   for (const box of ITEM_BOXES) {
-    if (state.collectedBoxes.includes(box.id) || previousS >= box.s || state.s + .9 < box.s) continue;
-    if (Math.abs(state.x - box.x) > box.radius + .72 || heightAboveSnow > box.height + .35) continue;
+    if (state.collectedBoxes.includes(box.id) || !touchesItemBox(state,previousS,box)) continue;
     state.collectedBoxes.push(box.id);
     const item: ItemKind = racePosition === 4 && random() < .4 ? "blizzard" : box.item;
     state.item = item;
@@ -242,7 +252,7 @@ function collectItemBoxes(state: RivalState, previousS: number, events: RivalEve
 }
 
 function collectCoins(state: RivalState, previousS: number, events: RivalEvent[]): void {
-  const heightAboveSnow = state.y - courseHeight(state.s);
+  const heightAboveSnow = state.y - courseHeight(state.s, state.x);
   for (const coin of COINS) {
     if (state.collectedCoins.includes(coin.id) || previousS >= coin.s || state.s + .9 < coin.s) continue;
     if (Math.abs(state.x - coin.x) > 1.25 || heightAboveSnow > 2.8) continue;
@@ -298,7 +308,7 @@ export function applyFreeze(state: RivalState): boolean {
   state.lateralSpeed = 0;
   state.grounded = true;
   state.verticalSpeed = 0;
-  state.y = courseHeight(state.s) + .52;
+  state.y = courseHeight(state.s, state.x) + .52;
   state.stun = 0;
   state.tumble = 0;
   state.windHit = 0;
@@ -365,7 +375,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
     state.lateralSpeed = 0;
     state.grounded = true;
     state.verticalSpeed = 0;
-    state.y = courseHeight(state.s) + .52;
+    state.y = courseHeight(state.s, state.x) + .52;
     return events;
   }
 
@@ -374,10 +384,11 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
     state.tumble += step;
     state.speed = Math.max(12, state.speed - 16 * step);
     state.s += state.speed * .28 * step;
-    state.y = Math.max(courseHeight(state.s) + .52, state.y - 7 * step);
+    state.x = courseWallX(state.s, state.x);
+    state.y = Math.max(courseHeight(state.s, state.x) + .52, state.y - 7 * step);
     if (state.stun === 0) {
       state.grounded = true;
-      state.y = courseHeight(state.s) + .52;
+      state.y = courseHeight(state.s, state.x) + .52;
       state.tumble = 0;
       state.targetX = clamp(state.x, -COURSE_HALF_WIDTH + 2, COURSE_HALF_WIDTH - 2);
     }
@@ -427,38 +438,48 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
 
   const desiredLateral = clamp((state.targetX - state.x) * 1.15, -10.5, 10.5);
   state.lateralSpeed += clamp(desiredLateral - state.lateralSpeed, -18 * step, 18 * step);
+  const previousX = state.x;
   state.x = clamp(state.x + state.lateralSpeed * step, -COURSE_HALF_WIDTH + 1.1, COURSE_HALF_WIDTH - 1.1);
   state.carve += (clamp(state.lateralSpeed / 9, -1, 1) - state.carve) * Math.min(1, step * 7);
   state.heading += (state.carve * .13 - state.heading) * Math.min(1, step * 8);
 
   const previousS = state.s;
-  state.s = Math.min(COURSE_LENGTH, state.s + state.speed * step);
+  state.s = Math.min(COURSE_LENGTH, state.s + state.speed * step * courseAdvanceScale(state.s, state.lateralSpeed, state.speed, state.x));
+  const wallX = courseWallX(state.s, state.x, previousX);
+  const hitWall = Math.abs(wallX - state.x) > .001;
+  state.x = wallX;
+  if(hitWall&&isForkSection(state.s))state.lateralSpeed=0;
 
   if (state.grounded) {
+    const shortcutOllie = getActiveCourse().forks?.some(f => state.s >= f.start && state.s <= f.end && state.x < f.left)
+      && OBSTACLES.some(o => !o.decorative && o.kind === "log" && o.s > state.s && o.s - state.s < 12 && Math.abs(o.x - state.x) < o.radius + 1);
     const ramp = RAMPS.find(item => item.id !== state.lastRamp
       && previousS < item.s && state.s >= item.s
       && Math.abs(state.x - item.x) < item.width / 2 + .5);
     if (ramp) {
       state.lastRamp = ramp.id;
       state.grounded = false;
-      state.y = courseHeight(ramp.s) + rampHeight(ramp) + .52;
+      state.y = courseHeight(ramp.s, state.x) + rampHeight(ramp) + .52;
       state.verticalSpeed = ramp.launch + state.speed * .04;
       state.spin = Math.sin(ramp.s) > 0 ? Math.PI * 2 : -Math.PI * 2;
       state.airTime = 0;
       events.push({ type: "RIVAL_TAKEOFF" });
+    } else if (shortcutOllie) {
+      state.grounded = false; state.verticalSpeed = 8; state.airTime = 0; state.spin = 0;
+      events.push({type:"RIVAL_TAKEOFF"});
     } else {
       const climbingRamp = RAMPS.find(item => {
         const start = item.s - rampLength(item);
         return state.s >= start && state.s <= item.s && Math.abs(state.x - item.x) < item.width / 2 + .5;
       });
       const rise = climbingRamp ? (state.s - (climbingRamp.s - rampLength(climbingRamp))) / rampLength(climbingRamp) * rampHeight(climbingRamp) : 0;
-      state.y = courseHeight(state.s) + rise + .52;
+      state.y = courseHeight(state.s, state.x) + rise + .52;
     }
   } else {
     state.airTime += step;
     state.verticalSpeed -= 21.5 * step;
     state.y += state.verticalSpeed * step;
-    const floor = courseHeight(state.s) + .52;
+    const floor = courseHeight(state.s, state.x) + .52;
     if (state.y <= floor && state.verticalSpeed < 0) {
       const completedTrick = Math.abs(state.spin) >= Math.PI * 1.75 && state.airTime >= .35;
       const boost = completedTrick ? clamp(1.35 + state.rampAffinity * .28 + state.airTime * .18, 1.45, 2.15) : 0;
@@ -475,11 +496,14 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
     }
   }
 
+  const ceiling = courseCeiling(state.s, state.x) - 2;
+  const hitCeiling = state.y > ceiling;
+  if (hitCeiling) { state.y = ceiling; state.verticalSpeed = Math.min(0, state.verticalSpeed); }
   collectItemBoxes(state, previousS, events, racePosition, random);
   collectCoins(state, previousS, events);
 
   // A IA normalmente evita a linha ruim, mas ainda pode errar sob pressão.
-  if (obstacleCollision(state)) {
+  if (obstacleCollision(state) || (((hitWall && !isForkSection(state.s)) || hitCeiling) && state.contactCooldown <= 0)) {
     if (state.shieldTime > 0) {
       state.shieldTime = 0;
       state.contactCooldown = .65;

@@ -9,7 +9,7 @@ describe("alpine panorama", () => {
     expect(png.readUInt32BE(16)).toBe(png.readUInt32BE(20) * 2);
   });
   it("keeps world orientation fixed and discards stale course loads", () => {
-    expect(Object.keys(COURSE_PANORAMAS)).toHaveLength(4);
+    expect(Object.keys(COURSE_PANORAMAS)).toHaveLength(5);
     expect(source).toContain('this.panoramaRequested !== courseId');
     expect(source).toContain('this.mountainPanorama.material.map?.dispose()');
     expect(source).toContain("this.mountainPanorama?.position.copy(this.camera.position)");

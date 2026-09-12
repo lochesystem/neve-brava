@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import { COURSE_PANORAMAS } from "./coursePanoramas.ts";
+import { createCourseStructures } from "./courseStructures.ts";
+import { createDesertScenery, createDesertLodge } from "./desertScenery.ts";
+import { bridgeContactRotation, bridgeBoardClearance } from "./bridgeContact.ts";
+import { courseCeiling, courseWallX, isBridgeSurface } from "../core/course.ts";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { createSnowmanGrabRig, bindSnowmanGrabPose } from "./snowmanGrabRig.ts";
@@ -85,6 +89,7 @@ const DEFAULT_SKY: SkyPalette = {
 };
 
 const COURSE_SKIES: Record<string, SkyPalette> = {
+  "canion-ferrugem": {background:0xdcb58d,top:0x5089a6,middle:0x9cc6cf,horizon:0xf2c48b,glow:0xffdb96,fog:0xd8ac82},
   "bosque-torto": {
     background: 0x8a719f,
     top: 0x554d83,
@@ -1039,6 +1044,7 @@ export class GameView {
   }
 
   private refreshGateModels(): void {
+    if (getActiveCourse().biome === "desert") return;
     if (this.startGateSlot && this.startGateModel) {
       this.startGateSlot.clear();
       this.startGateSlot.add(this.startGateModel.clone());
@@ -1282,8 +1288,9 @@ export class GameView {
     this.elapsedVisual += dt;
     this.lookOffset += (look * 3.2 - this.lookOffset) * dampAlpha(5, dt);
     const world = courseWorldPoint(state.s, state.x);
-    const frame = courseFrame(state.s);
-    const boardY = state.y - 0.39;
+    const frame = courseFrame(state.s, state.x);
+    const hardDeck = isBridgeSurface(state.s,state.x) && state.grounded && state.recovering <= 0;
+    const boardY = state.y - 0.39 + (hardDeck ? bridgeBoardClearance() : 0);
     const riderMoving = state.elapsed > .05 && state.s > .25;
     const riderInLift = state.liftTime > 0;
     this.rider.visible = !riderInLift;
@@ -1317,7 +1324,8 @@ export class GameView {
       );
     } else {
       const airRoll = state.grounded ? 0 : state.spin;
-      this.rider.rotation.set(state.grounded ? 0.03 : state.flip, frame.heading + state.heading + airRoll, -state.carve * 0.3);
+      this.rider.rotation.set(state.grounded ? (hardDeck ? 0 : 0.03) : state.flip, frame.heading + state.heading + airRoll, hardDeck ? 0 : -state.carve * 0.3);
+      if(hardDeck)this.rider.quaternion.premultiply(bridgeContactRotation(state.s,state.x));
       this.riderTumblePivot.position.y = 1.18;
       this.riderTumblePivot.rotation.set(0, 0, 0);
     }
@@ -1365,7 +1373,7 @@ export class GameView {
       this.riderFreezeShell.rotation.y += dt * .7;
       this.riderFreezeShell.scale.setScalar(1 + Math.sin(this.elapsedVisual * 5) * .025);
     }
-    if (state.recovering > 0 && Math.random() < dt * (this.quality === "performance" ? 20 : 42)) {
+    if (!isBridgeSurface(state.s,state.x) && state.recovering > 0 && Math.random() < dt * (this.quality === "performance" ? 20 : 42)) {
       const origin = new THREE.Vector3(world.x, groundY + 0.16, world.z);
       const spray = new THREE.Vector3(
         -frame.tx * (2 + Math.random() * 3) + frame.nx * state.tumbleDirection * (1 + Math.random() * 2),
@@ -1374,7 +1382,7 @@ export class GameView {
       );
       this.spawnParticle(origin, Math.random() > 0.18 ? PALETTE.snow : PALETTE.snowBlue, 0.16 + Math.random() * 0.12, 0.48, spray);
     }
-    if (riderMoving && state.grounded && state.speed > 12 && Math.random() < dt * (this.quality === "performance" ? 36 : 78)) {
+    if (!isBridgeSurface(state.s,state.x) && riderMoving && state.grounded && state.speed > 12 && Math.random() < dt * (this.quality === "performance" ? 36 : 78)) {
       const origin = new THREE.Vector3(world.x, boardY + 0.08, world.z);
       const spraySpeed = 6 + state.speed * 0.13;
       const backwards = new THREE.Vector3(-frame.tx * spraySpeed, 1.6 + Math.random() * 2.8, -frame.tz * spraySpeed);
@@ -1531,7 +1539,8 @@ export class GameView {
   }
 
   private updateSnowTrail(trail: SnowTrail, s: number, x: number, grounded: boolean, speed: number, carve: number): void {
-    if (!grounded || speed < 7 || s < .35 || s >= COURSE_LENGTH) {
+    const onBridge = isBridgeSurface(s,x);
+    if (onBridge || !grounded || speed < 7 || s < .35 || s >= COURSE_LENGTH) {
       trail.last = null;
       return;
     }
@@ -1551,9 +1560,10 @@ export class GameView {
     const ridgeHalf = .045;
     const slot = trail.cursor * TRAIL_VERTICES_PER_SEGMENT;
     let vertex = slot;
-    const compressed = new THREE.Color(0x9fb6c3);
-    const grooveWall = new THREE.Color(0x718b9d);
-    const ridge = new THREE.Color(0xf4f1df);
+    const desert = getActiveCourse().biome === "desert";
+    const compressed = new THREE.Color(desert ? 0xc6a16f : 0x9fb6c3);
+    const grooveWall = new THREE.Color(desert ? 0x99734e : 0x718b9d);
+    const ridge = new THREE.Color(desert ? 0xeed1a0 : 0xf4f1df);
     const point = (sample: TrailSample, lateral: number, lift: number): [number, number, number] => {
       const world = courseWorldPoint(sample.s, sample.x + lateral);
       return [world.x, courseTerrainHeight(sample.s, sample.x + lateral) + lift, world.z];
@@ -1606,9 +1616,10 @@ export class GameView {
 
   private updateOpponent(state: RivalState, group: THREE.Group, visual: THREE.Group, shadow: THREE.Mesh, dt: number): void {
     const world = courseWorldPoint(state.s, state.x);
-    const frame = courseFrame(state.s);
+    const frame = courseFrame(state.s, state.x);
     const groundY = courseTerrainHeight(state.s, state.x);
-    const surfaceOffset = Math.max(0, state.y - courseHeight(state.s) - .52);
+    const surfaceOffset = Math.max(0, state.y - courseHeight(state.s,state.x) - .52);
+    const hardDeck = isBridgeSurface(state.s,state.x) && state.grounded && state.stun <= 0;
     const moving = state.elapsed > .05 && state.s > .25 && state.freezeTime <= 0;
     // Os GLBs têm pranchas com espessuras distintas. O encaixe individual põe
     // a sola dentro da camada superficial da neve sem afundar o personagem.
@@ -1617,13 +1628,14 @@ export class GameView {
     shadow.visible = group.visible;
     // Usa o relevo lateral real, não apenas a altura da linha central. O pequeno
     // encaixe evita a fresta entre a base da prancha e a neve.
-    group.position.set(world.x, groundY + surfaceOffset - snowContactInset, world.z);
+    group.position.set(world.x, groundY + surfaceOffset + (hardDeck ? bridgeBoardClearance() : -snowContactInset), world.z);
     group.rotation.set(
-      state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded && moving ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
+      state.stun > 0 ? -Math.min(1.05, state.tumble * 2.7) : state.grounded && moving && !hardDeck ? Math.sin(this.elapsedVisual * 9 + state.s * .03) * .035 : 0,
       frame.heading + state.heading + (state.grounded ? 0 : state.spin * clamp(state.airTime / .9, 0, 1)),
-      state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : -state.carve * .27 + Math.sin(state.windHit * 18) * state.windHit * .42,
+      state.stun > 0 ? Math.sin(state.tumble * 8) * .42 : hardDeck ? 0 : -state.carve * .27 + Math.sin(state.windHit * 18) * state.windHit * .42,
     );
-    const pump = moving && state.grounded && state.stun <= 0 ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
+    if(hardDeck)group.quaternion.premultiply(bridgeContactRotation(state.s,state.x));
+    const pump = moving && state.grounded && state.stun <= 0 && !hardDeck ? (Math.sin(this.elapsedVisual * 9 + state.s * .03) + 1) * .018 : 0;
     const grab = this.remoteGrabPoses.get(visual);
     if (grab) {
       const target = state.grabHeld && !state.grounded && state.stun <= 0 && state.liftTime <= 0 ? 1 : 0;
@@ -1667,7 +1679,7 @@ export class GameView {
     const scale = clamp(1 - airGap * .035, .55, 1);
     shadow.scale.set((state.id === "yeti" ? 1.9 : 1.8) * scale, (state.id === "yeti" ? .7 : .66) * scale, 1);
 
-    if (moving && state.grounded && state.speed > 15 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
+    if (!isBridgeSurface(state.s,state.x) && moving && state.grounded && state.speed > 15 && Math.random() < dt * (this.quality === "performance" ? 18 : 38)) {
       const origin = new THREE.Vector3(world.x, groundY + .12, world.z);
       const spray = new THREE.Vector3(-frame.tx * 7 + frame.nx * state.carve * 3, 1.5 + Math.random() * 2, -frame.tz * 7 + frame.nz * state.carve * 3);
       this.spawnParticle(origin, PALETTE.snow, .13 + Math.random() * .08, .42, spray);
@@ -1783,7 +1795,7 @@ export class GameView {
     const panoramaActive = this.mountainPanorama !== null && this.panoramaLoaded === courseId;
     if (this.mountainPanorama) this.mountainPanorama.visible = panoramaActive;
     if (this.skyDome) this.skyDome.visible = !panoramaActive;
-    this.skyMountains.visible = !panoramaActive;
+    this.skyMountains.visible = !panoramaActive && getActiveCourse().biome !== "desert";
     this.skyClouds.visible = !panoramaActive;
     const palette = COURSE_SKIES[getActiveCourse().id] ?? DEFAULT_SKY;
     this.scene.background = new THREE.Color(palette.background);
@@ -1897,15 +1909,19 @@ export class GameView {
     // alguns metros antes do atleta e, sem este recuo, enxergava sob o terreno.
     const terrainStart = -52;
     const terrainSpan = COURSE_LENGTH - terrainStart;
-    const lanes = [-86, -64, -46, -30, -22, -14, 0, 14, 22, 30, 46, 64, 86];
+    const natural = RAMPS.filter(ramp => ramp.natural);
+    const bridges=getActiveCourse().forks?.filter(f=>f.bridge) ?? [];
+    const desert=getActiveCourse().biome === "desert";
+    const rows = [...new Set([...Array.from({ length: segments + 1 }, (_, i) => terrainStart + i / segments * terrainSpan), ...bridges.flatMap(f=>[f.start,f.end]), ...natural.flatMap(ramp => [ramp.s - rampLength(ramp), ramp.s, ramp.s + .05])])].sort((a, b) => a - b);
+    const lanes = [...new Set([-86, -64, -46, -30, -22, -14, 0, 14, 22, 30, 46, 64, 86, ...bridges.flatMap(f=>[f.left,f.right]), ...natural.flatMap(ramp => [ramp.x - ramp.width / 2 - .7, ramp.x + ramp.width / 2 + .7])])].sort((a, b) => a - b);
     const positions: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
-    const snow = new THREE.Color(PALETTE.snow);
-    const blue = new THREE.Color(PALETTE.snowBlue);
-    const sideBlue = new THREE.Color(0x91abc6);
-    for (let row = 0; row <= segments; row += 1) {
-      const s = terrainStart + row / segments * terrainSpan;
+    const snow = new THREE.Color(desert ? 0xe9c38d : PALETTE.snow);
+    const blue = new THREE.Color(desert ? 0xc39563 : PALETTE.snowBlue);
+    const sideBlue = new THREE.Color(desert ? 0xb87850 : 0x91abc6);
+    for (let row = 0; row < rows.length; row += 1) {
+      const s = rows[row];
       for (const lateral of lanes) {
         const world = courseWorldPoint(s, lateral);
         positions.push(world.x, courseTerrainHeight(s, lateral), world.z);
@@ -1916,8 +1932,9 @@ export class GameView {
           : snow.clone().lerp(blue, pisteShade * 0.34 + (row % 9 === 0 ? 0.035 : 0));
         colors.push(color.r, color.g, color.b);
       }
-      if (row < segments) {
+      if (row < rows.length - 1) {
         for (let column = 0; column < lanes.length - 1; column += 1) {
+          if(bridges.some(f=>s>=f.start && rows[row+1]<=f.end && lanes[column]>=f.left))continue;
           const base = row * lanes.length + column;
           indices.push(base, base + 1, base + lanes.length, base + lanes.length, base + 1, base + lanes.length + 1);
         }
@@ -2022,6 +2039,7 @@ export class GameView {
     this.createEventAreas();
 
     for (const ramp of RAMPS) {
+      if (ramp.natural) continue;
       const length = rampLength(ramp);
       const centerS = ramp.s - length / 2;
       const height = rampHeight(ramp);
@@ -2040,7 +2058,9 @@ export class GameView {
       this.world.add(rampModel);
     }
 
-    this.createSnowfall();
+    this.world.add(createCourseStructures());
+    if(desert)this.world.add(createDesertScenery());
+    else this.createSnowfall();
   }
 
   private updatePickupVisuals(state: RiderState): void {
@@ -2098,12 +2118,12 @@ export class GameView {
     this.world.add(staging);
 
     const startArch = new THREE.Group();
-    startArch.add(this.startGateModel?.clone() ?? createEventArch("PARTIDA", PALETTE.pine, PALETTE.yellow));
+    startArch.add(getActiveCourse().biome === "desert" ? createEventArch("PARTIDA",0x97613b,PALETTE.yellow) : this.startGateModel?.clone() ?? createEventArch("PARTIDA", PALETTE.pine, PALETTE.yellow));
     this.startGateSlot = startArch;
     this.placeCourseDecoration(startArch, 21, 0);
     this.placeCourseDecoration(createCheckeredLine(), 4, 0, 0.025);
 
-    const startChalet = createChalet();
+    const startChalet = getActiveCourse().biome === "desert" ? createDesertLodge() : createChalet();
     startChalet.rotation.y = 0.18;
     this.placeCourseDecoration(startChalet, 12, -29);
     for (const side of [-1, 1]) {
@@ -2118,13 +2138,13 @@ export class GameView {
     }
 
     const finishArea = new THREE.Group();
-    const plaza = new THREE.Mesh(new THREE.BoxGeometry(62, 0.12, 76), toon(PALETTE.snow));
+    const plaza = new THREE.Mesh(new THREE.BoxGeometry(62, 0.12, 76), toon(getActiveCourse().biome === "desert" ? 0xe9c38d : PALETTE.snow));
     plaza.position.set(0, -0.08, -27);
     plaza.receiveShadow = true;
     finishArea.add(plaza);
 
     const finishArch = new THREE.Group();
-    finishArch.add(this.finishGateModel?.clone() ?? createEventArch("CHEGADA", PALETTE.coral, PALETTE.yellow));
+    finishArch.add(getActiveCourse().biome === "desert" ? createEventArch("CHEGADA",0x97613b,PALETTE.yellow) : this.finishGateModel?.clone() ?? createEventArch("CHEGADA", PALETTE.coral, PALETTE.yellow));
     this.finishGateSlot = finishArch;
     finishArch.position.set(0, 0, 7);
     finishArea.add(finishArch);
@@ -2136,7 +2156,7 @@ export class GameView {
     podium.position.set(-20, 0, -19);
     podium.rotation.y = 0.16;
     finishArea.add(podium);
-    const finishChalet = createChalet();
+    const finishChalet = getActiveCourse().biome === "desert" ? createDesertLodge() : createChalet();
     finishChalet.scale.setScalar(0.82);
     finishChalet.position.set(23, 0, -27);
     finishChalet.rotation.y = -0.24;
@@ -2179,7 +2199,7 @@ export class GameView {
     const scale = new THREE.Vector3();
     const position = new THREE.Vector3();
     const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
-    const rockInstances = new THREE.InstancedMesh(rockGeometry, toon(PALETTE.rock), rocks.length);
+    const rockInstances = new THREE.InstancedMesh(rockGeometry, toon(getActiveCourse().biome === "desert" ? 0xad744f : PALETTE.rock), rocks.length);
     rocks.forEach((rock, index) => {
       const world = courseWorldPoint(rock.s, rock.x);
       quaternion.setFromEuler(new THREE.Euler(0.1, (rock.s * 0.31) % Math.PI, -0.08));
@@ -2318,17 +2338,23 @@ export class GameView {
     const speedFactor = clamp((state.speed - 12) / 30, 0, 1);
     const boostFactor = state.turboTime > 0 ? clamp(state.turboTime / .28, 0, 1) : 0;
     const world = courseWorldPoint(state.s, state.x);
-    const frame = courseFrame(state.s);
+    const frame = courseFrame(state.s, state.x);
     const behind = 5.5 + speedFactor * .75 + boostFactor * .4;
     // Um ponto de vista mais alto mantém o piloto em destaque, mas revela a
     // linha da pista e os obstáculos que antes ficavam escondidos atrás dele.
     const cameraY = state.y + 4.15 + (state.grounded ? 0 : .8) + Math.sin(this.elapsedVisual * 36) * .025 * boostFactor;
     const desired = new THREE.Vector3(
       world.x - frame.tx * behind + frame.nx * (this.lookOffset + Math.sin(this.elapsedVisual * 43) * .045 * boostFactor),
-      cameraY,
+      Math.min(cameraY, courseCeiling(state.s - behind, state.x) - 1),
       world.z - frame.tz * behind + frame.nz * this.lookOffset,
     );
+    if (getActiveCourse().tunnels?.some(t => state.s >= t.start && state.s <= t.end + behind)
+      || getActiveCourse().forks?.some(f => state.s >= f.start && state.s <= f.end + behind)) {
+      const cameraPoint = courseWorldPoint(state.s - behind, courseWallX(state.s - behind, state.x + this.lookOffset, state.x));
+      desired.x = cameraPoint.x; desired.z = cameraPoint.z;
+    }
     this.camera.position.lerp(desired, dampAlpha(state.recovering > 0 ? 9 : 4.8, dt));
+    this.camera.position.y = Math.min(this.camera.position.y, courseCeiling(state.s - behind, state.x) - 1);
     const focusDistance = 15 + speedFactor * 13 + boostFactor * 3;
     const focus = new THREE.Vector3(
       world.x + frame.tx * focusDistance + frame.nx * this.lookOffset * 0.25,
@@ -2345,7 +2371,7 @@ export class GameView {
   private updateSnowfall(state: RiderState, dt: number): void {
     if (!this.snowfall || !this.snowfallPositions) return;
     const world = courseWorldPoint(state.s, state.x);
-    const frame = courseFrame(state.s);
+    const frame = courseFrame(state.s, state.x);
     this.snowfall.position.set(world.x, state.y + 3, world.z);
     this.snowfall.rotation.y = frame.heading;
     const visibleCount = this.quality === "high" ? 1_400 : this.quality === "medium" ? 900 : 480;

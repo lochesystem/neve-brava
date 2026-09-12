@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { courseCenterFor, courseHeightFor, type CourseDefinition, type ObstacleKind } from "../core/course.ts";
+import { courseCenterFor, courseHeightFor, courseWorldPointFor, type CourseDefinition, type ObstacleKind } from "../core/course.ts";
 
 const SAMPLES = 180;
 const COURSE_THEMES = [
@@ -7,9 +7,14 @@ const COURSE_THEMES = [
   { snow: 0xe9f7fb, edge: 0x75cde8, accent: 0x9be8ff, ground: 0x294b69 },
   { snow: 0xf2f0df, edge: 0x72b895, accent: 0xffa85f, ground: 0x315846 },
   { snow: 0xeee8f6, edge: 0xb393dc, accent: 0xff725e, ground: 0x382f5d },
+  { snow: 0xe9c38d, edge: 0xba7549, accent: 0xffcc67, ground: 0x624a3a },
 ] as const;
 
-function pointAt(course: CourseDefinition, s: number): THREE.Vector3 {
+function pointAt(course: CourseDefinition, s: number, lateral = 0): THREE.Vector3 {
+  if(course.forks) {
+    const point=courseWorldPointFor(course,s,lateral);
+    return new THREE.Vector3(point.x*.72,(courseHeightFor(course,s,lateral)-course.startHeight)*.52,(course.length*.5+point.z)*.14);
+  }
   return new THREE.Vector3(
     courseCenterFor(course, s) * .72,
     (courseHeightFor(course, s) - course.startHeight) * .52,
@@ -29,10 +34,20 @@ function addCourseRibbon(group: THREE.Group, course: CourseDefinition, theme: ty
   const snow = new THREE.Color(theme.snow), sectionColor = new THREE.Color();
   for (let index = 0; index < SAMPLES; index += 1) {
     const s0 = index / SAMPLES * course.length, s1 = (index + 1) / SAMPLES * course.length;
+    const bridge=course.forks?.find(f=>f.bridge&&s0>=f.start&&s1<=f.end);
+    if(bridge){
+      for(const [left,right] of [[-course.halfWidth,bridge.left],[bridge.right,course.halfWidth]]){
+        const a=pointAt(course,s0,left),b=pointAt(course,s0,right),c=pointAt(course,s1,left),d=pointAt(course,s1,right);
+        positions.push(...a.toArray(),...b.toArray(),...c.toArray(),...c.toArray(),...b.toArray(),...d.toArray());
+        sectionColor.set(left===bridge.right ? 0x97613b : theme.snow);
+        for(let i=0;i<6;i++)colors.push(sectionColor.r,sectionColor.g,sectionColor.b);
+      }
+      continue;
+    }
     const a = pointAt(course, s0), b = pointAt(course, s1);
     const sideA = sideAt(course, s0), sideB = sideAt(course, s1), half = course.halfWidth * .92;
-    const leftA = a.clone().addScaledVector(sideA, -half), rightA = a.clone().addScaledVector(sideA, half);
-    const leftB = b.clone().addScaledVector(sideB, -half), rightB = b.clone().addScaledVector(sideB, half);
+    const leftA = course.forks ? pointAt(course,s0,-course.halfWidth) : a.clone().addScaledVector(sideA, -half), rightA = course.forks ? pointAt(course,s0,course.halfWidth) : a.clone().addScaledVector(sideA, half);
+    const leftB = course.forks ? pointAt(course,s1,-course.halfWidth) : b.clone().addScaledVector(sideB, -half), rightB = course.forks ? pointAt(course,s1,course.halfWidth) : b.clone().addScaledVector(sideB, half);
     positions.push(...leftA.toArray(), ...rightA.toArray(), ...leftB.toArray(), ...rightA.toArray(), ...rightB.toArray(), ...leftB.toArray());
     const section = course.sections.find(candidate => s0 >= candidate.start && s0 < candidate.end);
     sectionColor.set(section?.color ?? theme.edge).lerp(snow, .72);
@@ -50,6 +65,7 @@ function addCourseRibbon(group: THREE.Group, course: CourseDefinition, theme: ty
     for (const direction of [-1, 1]) {
       const a = pointAt(course, s0).addScaledVector(sideAt(course, s0), direction * course.halfWidth * .94);
       const b = pointAt(course, s1).addScaledVector(sideAt(course, s1), direction * course.halfWidth * .94);
+      if(course.forks) { a.copy(pointAt(course,s0,direction*course.halfWidth)); b.copy(pointAt(course,s1,direction*course.halfWidth)); }
       a.y += .6; b.y += .6; rails.push(...a.toArray(), ...b.toArray());
     }
   }
@@ -75,6 +91,27 @@ function obstacleColor(kind: ObstacleKind): number {
 }
 
 function addCourseDetails(group: THREE.Group, course: CourseDefinition, theme: typeof COURSE_THEMES[number]): void {
+  const ice = new THREE.MeshStandardMaterial({ color: 0x77b9db, roughness: .8 });
+  for (const f of course.forks ?? []) {
+    if(f.bridge)continue;
+    const vertices:number[]=[];
+    const p=(s:number,x:number,h:number)=>pointAt(course,s,x).add(new THREE.Vector3(0,h*Math.sin(Math.PI*(s-f.start)/(f.end-f.start))**.5,0));
+    for(let i=0;i<32;i++) {
+      const a=f.start+(f.end-f.start)*i/32,b=f.start+(f.end-f.start)*(i+1)/32,m=(f.left+f.right)/2;
+      for(const edge of [f.left,f.right]) vertices.push(...p(a,edge,0).toArray(),...p(a,m,13).toArray(),...p(b,edge,0).toArray(),...p(b,edge,0).toArray(),...p(a,m,13).toArray(),...p(b,m,13).toArray());
+    }
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();
+    group.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x9bc4d6,side:THREE.DoubleSide})));
+  }
+  for (const structure of (course.tunnels ?? []).map(t => ({...t, x:0,width:t.halfWidth*2,roof:true}))) {
+    for (let s=structure.start;s<structure.end;s+=12) {
+      const marker=new THREE.Mesh(new THREE.BoxGeometry(structure.width*.92,structure.roof?2:9,2.3),ice);
+      marker.position.copy(pointAt(course,s)).addScaledVector(sideAt(course,s),structure.x*.92);
+      if(course.forks) marker.position.copy(pointAt(course,s,structure.x));
+      marker.position.y+=structure.roof?9:4.5;
+      group.add(marker);
+    }
+  }
   const obstacleMaterials = new Map<ObstacleKind, THREE.MeshStandardMaterial>();
   const obstacleGeometries = new Map<ObstacleKind, THREE.BufferGeometry>();
   for (const obstacle of course.obstacles) {
@@ -86,6 +123,7 @@ function addCourseDetails(group: THREE.Group, course: CourseDefinition, theme: t
     obstacleGeometries.set(obstacle.kind, geometry);
     const marker = new THREE.Mesh(geometry, material);
     marker.position.copy(pointAt(course, obstacle.s)).addScaledVector(sideAt(course, obstacle.s), obstacle.x * .92);
+    if(course.forks) marker.position.copy(pointAt(course,obstacle.s,obstacle.x));
     marker.position.y += obstacle.kind === "tree" ? 6.5 : obstacle.kind === "ice" ? 5 : 2;
     marker.scale.setScalar(obstacle.accent ? 1.22 : 1);
     group.add(marker);
@@ -152,7 +190,7 @@ export class TrackPreview {
     this.courseId = course.id;
     this.canvas.setAttribute("aria-label", `Maquete tridimensional da pista real ${course.name}`);
     disposeObject(this.model); this.scene.remove(this.model);
-    const theme = COURSE_THEMES[Math.max(0, Math.min(COURSE_THEMES.length - 1, course.order - 1))];
+    const theme = COURSE_THEMES[course.biome === "desert" ? 4 : course.id === "pico-tempestade" ? 3 : course.id === "passagem-geleira" ? 1 : Math.max(0, Math.min(3, course.order - 1))];
     const content = new THREE.Group(); addCourseRibbon(content, course, theme); addCourseDetails(content, course, theme);
     const bounds = new THREE.Box3().setFromObject(content), center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
     const scale = 8.8 / Math.max(size.x, size.z, 1);

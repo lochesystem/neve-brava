@@ -1,9 +1,10 @@
 import "./styles.css";
+import { CAMPAIGN_CHAPTERS, CAMPAIGN_ORDER, readCampaign, recordCampaign, courseUnlocked, nextCampaignCourse } from "./core/campaign.ts";
 import "./ui/design-system.css";
 import "./ui/title-screen.css";
 import "./ui/menu-screens.css";
 import {
-  COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterFor, courseCenterX, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
+  COURSES, COURSE_LENGTH, RACE_LAPS, courseCenterFor, courseWorldPointFor, getActiveCourse, raceProgress, setActiveCourse, validateAllCourses,
   type CourseDefinition, type ItemKind,
 } from "./core/course.ts";
 import {
@@ -114,6 +115,9 @@ let previousGiru: RivalState = { ...giru };
 let screen: Screen = "title";
 let settingsReturn: Screen = "title";
 let selectedCourseIndex = 0;
+const campaignTest = new URLSearchParams(location.search).get("dev") === "1" && new URLSearchParams(location.search).get("campaign-test") === "1";
+let campaignSave = readCampaign(safeStorageGet("neve-brava.campaign.v1"));
+const canPlayCourse = (id: string) => campaignTest || courseUnlocked(campaignSave, id);
 let selectedCharacter: CharacterId = "snowman";
 let characterSelectionActive = false;
 let hasChosenCharacter = false;
@@ -233,12 +237,16 @@ function mapGeometry(course: CourseDefinition, width: number, height: number, pa
 
 function renderTrackCards(): void {
   const grid = $("#track-grid");
-  grid.innerHTML = COURSES.map((course, index) => `
-    <button class="track-card focusable ${index === selectedCourseIndex ? "selected" : ""}" data-track-index="${index}" type="button">
+  grid.innerHTML = CAMPAIGN_CHAPTERS.map((chapter, chapterIndex) => `<section class="campaign-group"><h3 class="campaign-chapter">${chapterIndex + 1} · ${chapter.name}</h3><div class="chapter-courses">` + chapter.courses.map(id => {
+    const index = COURSES.findIndex(course => course.id === id), course = COURSES[index];
+    const result = campaignSave.results[id];
+    return `
+    <button class="track-card focusable ${index === selectedCourseIndex ? "selected" : ""}" data-track-index="${index}" type="button" ${canPlayCourse(id) ? "" : "disabled"}>
       <b class="track-card-index">${String(course.order).padStart(2, "0")}</b>
       <span><small>${course.difficulty}</small><strong>${course.name}</strong></span>
-      <em>${course.subtitle}</em>
-    </button>`).join("");
+      <em>${!canPlayCourse(id) ? "🔒 Pódio na etapa anterior" : result ? `${result.place}º · ${formatTime(result.time)}` : course.subtitle}</em>
+    </button>`;
+  }).join("") + "</div></section>").join("");
   grid.querySelectorAll<HTMLButtonElement>("[data-track-index]").forEach(button => {
     const select = () => {
       selectedCourseIndex = Number(button.dataset.trackIndex);
@@ -256,7 +264,7 @@ function updateSelectedCourseCopy(): void {
   trackPreview.setCourse(course);
   $("#selected-track-name").textContent = course.name;
   $("#selected-track-copy").textContent = `${course.subtitle} · ${course.difficulty} · ${(course.length / 1_000).toFixed(1)} km`;
-  $("#track-showcase-stage").textContent = `ETAPA ${String(course.order).padStart(2, "0")} · ${course.difficulty}`;
+  $("#track-showcase-stage").textContent = `${campaignTest ? "TESTE · SEM SALVAR · " : ""}ETAPA ${String(course.order).padStart(2, "0")} · ${course.difficulty}`;
   $("#track-showcase-name").textContent = course.name;
   $("#track-showcase-subtitle").textContent = course.description;
   $("#track-showcase-length").textContent = `${(course.length / 1_000).toFixed(1)} KM`;
@@ -270,6 +278,12 @@ function buildRaceMap(): void {
   mapProjection = map.projection;
   mapLine.setAttribute("d", map.path);
   mapShadow.setAttribute("d", map.path);
+  $("#course-map-branch").setAttribute("d", (course.forks ?? []).map(fork => Array.from({length:25}, (_, i) => {
+    const t=i/24, s=fork.start-35+t*(fork.end-fork.start+70);
+    const lateral=(fork.left-course.halfWidth)/2*Math.min(1,t*8,(1-t)*8);
+    const x=24+(courseWorldPointFor(course,s,lateral).x-map.projection.minX)/map.projection.spanX*132;
+    return `${i ? "L":"M"}${x.toFixed(1)} ${(24+s/course.length*472).toFixed(1)}`;
+  }).join(" ")).join(" "));
   mapStart.setAttribute("cx", mapProjection.startX.toFixed(1));
   mapFinish.setAttribute("transform", `translate(${(mapProjection.finishX - 90).toFixed(1)} 0)`);
   $("#map-course-number").textContent = `PISTA ${String(course.order).padStart(2, "0")}`;
@@ -277,7 +291,7 @@ function buildRaceMap(): void {
 }
 
 function markerTransform(progress: number, lateral: number): string {
-  const x = 24 + (courseCenterX(progress) + lateral - mapProjection.minX) / mapProjection.spanX * 132;
+  const x = 24 + (courseWorldPointFor(getActiveCourse(),progress,lateral).x - mapProjection.minX) / mapProjection.spanX * 132;
   const y = 24 + Math.min(1, Math.max(0, progress / COURSE_LENGTH)) * 472;
   return `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
 }
@@ -353,6 +367,7 @@ function showScreen(next: Screen): void {
 
 function openCampaign(): void {
   if (multiplayerActive || multiplayerRoom) leaveMultiplayer();
+  if (!canPlayCourse(COURSES[selectedCourseIndex].id)) selectedCourseIndex = 0;
   audio.setMenuTrack();
   document.documentElement.dataset.musicTrack = "menu";
   audio.start();
@@ -535,6 +550,7 @@ function selectCharacter(character: CharacterId): void {
 }
 
 function openCharacterSelect(): void {
+  if (!canPlayCourse(COURSES[selectedCourseIndex].id)) return;
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
@@ -552,6 +568,7 @@ function openCharacterSelect(): void {
 }
 
 function startRun(): void {
+  if (!multiplayerActive && !canPlayCourse(COURSES[selectedCourseIndex].id)) return;
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
   if (!characterSelectionActive && !hasChosenCharacter) return;
   hasChosenCharacter = true;
@@ -636,8 +653,12 @@ function finish(): void {
       <b>${entry.name}</b>${entry.player ? "<em>VOCÊ</em>" : ""}
       <time>${formatTime(entry.time)}</time>
     </li>`).join("");
-  const finalCourse = selectedCourseIndex >= COURSES.length - 1;
-  $("#next-track-button").textContent = multiplayerActive ? "✕ VOLTAR AO MULTIPLAYER" : finalCourse ? "✕ CONCLUIR CAMPANHA" : "✕ PRÓXIMA PISTA";
+  if (!multiplayerActive && !campaignTest) {
+    campaignSave = recordCampaign(campaignSave, course.id, standings.findIndex(entry => entry.player) + 1, state.elapsed);
+    safeStorageSet("neve-brava.campaign.v1", JSON.stringify(campaignSave));
+  }
+  const finalCourse = course.id === CAMPAIGN_ORDER.at(-1) && (campaignSave.results[course.id]?.place ?? 4) <= 3;
+  $("#next-track-button").textContent = multiplayerActive ? "✕ VOLTAR AO MULTIPLAYER" : finalCourse ? "✕ CAMPANHA CONCLUÍDA!" : nextCampaignCourse(campaignSave, course.id) || campaignTest ? "✕ PRÓXIMA PISTA" : "✕ TENTAR O PÓDIO";
   $("#restart-button").classList.toggle("hidden", multiplayerActive);
   showScreen("results");
 }
@@ -1075,13 +1096,13 @@ function updateControllerStatus(): void {
   const available = input.compatible || input.usingDevFallback || input.touchEnabled;
   controllerCard.classList.toggle("connected", available);
   controllerCard.querySelector("small")!.textContent = input.compatible ? "CONTROLE CONECTADO" : input.touchEnabled ? "CONTROLES TOUCH" : input.usingDevFallback ? "MODO TECLADO" : "CONECTE SEU CONTROLE";
-  startButton.disabled = !available;
+  startButton.disabled = !available || !canPlayCourse(COURSES[selectedCourseIndex].id);
   controllerName.textContent = input.compatible ? input.gamepadName : input.touchEnabled
     ? "Controles touch prontos · jogue na horizontal"
     : input.usingDevFallback ? "Fallback de teclado habilitado para desenvolvimento"
     : input.connected ? `Controle incompatível: ${input.gamepadName}` : "Conecte o DualSense e pressione um botão";
   const devBadge = $("#dev-badge");
-  devBadge.textContent = playerSpecialTest
+  devBadge.textContent = campaignTest ? "TESTE DE CAMPANHA · SEM SALVAR" : playerSpecialTest
     ? `MODO TESTE · ESPECIAL LIVRE${input.usingDevFallback ? " · TECLADO" : ""}`
     : "MODO DEV · TECLADO";
   devBadge.classList.toggle("hidden", screen !== "playing" || (!input.usingDevFallback && !playerSpecialTest));
@@ -1362,7 +1383,11 @@ $("#restart-button").addEventListener("click", startRun);
 $("#result-title-button").addEventListener("click", () => { if (multiplayerActive || multiplayerRoom) leaveMultiplayer(); showScreen("title"); });
 $("#next-track-button").addEventListener("click", () => {
   if (multiplayerActive) { leaveMultiplayer(); openMultiplayer(); return; }
-  if (selectedCourseIndex < COURSES.length - 1) { selectedCourseIndex += 1; startRun(); } else { selectedCourseIndex = 0; openCampaign(); }
+  const id = COURSES[selectedCourseIndex].id;
+  const next = campaignTest ? CAMPAIGN_ORDER[CAMPAIGN_ORDER.indexOf(id) + 1] : nextCampaignCourse(campaignSave, id);
+  if (next) { selectedCourseIndex = COURSES.findIndex(course => course.id === next); startRun(); }
+  else if (id === CAMPAIGN_ORDER.at(-1) && (campaignSave.results[id]?.place ?? 4) <= 3) openCampaign();
+  else startRun();
 });
 
 function safeStorageGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }

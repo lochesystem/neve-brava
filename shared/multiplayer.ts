@@ -1,7 +1,7 @@
 export const MULTIPLAYER_CHARACTERS = ["guy", "snowman", "yeti", "giru"] as const;
 export type MultiplayerCharacterId = typeof MULTIPLAYER_CHARACTERS[number];
 
-export const MULTIPLAYER_COURSES = ["vale-bravo", "canion-cristal", "bosque-torto", "pico-tempestade"] as const;
+export const MULTIPLAYER_COURSES = ["vale-bravo", "canion-cristal", "bosque-torto", "passagem-geleira", "canion-ferrugem", "pico-tempestade"] as const;
 export type MultiplayerCourseId = typeof MULTIPLAYER_COURSES[number];
 
 export type RoomMode = "private" | "quick";

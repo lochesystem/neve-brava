@@ -24,7 +24,7 @@ describe("rivais", () => {
     expect(maximumX - minimumX).toBeGreaterThan(8);
   });
 
-  it("conclui as quatro pistas sem ficar preso em obstáculos", () => {
+  it("conclui todas as pistas sem ficar preso em obstáculos", () => {
     for (const course of COURSES) {
       setActiveCourse(course.id);
       for (const profile of [YETI_PROFILE, GUY_PROFILE]) {
