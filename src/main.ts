@@ -1,5 +1,5 @@
 import "./styles.css";
-import { CAMPAIGN_CHAPTERS, CAMPAIGN_ORDER, readCampaign, recordCampaign, courseUnlocked, nextCampaignCourse } from "./core/campaign.ts";
+import { CAMPAIGN_CHAPTERS, CAMPAIGN_ORDER, readCampaign, newCampaign, finishCampaignStage, courseUnlocked } from "./core/campaign.ts";
 import "./ui/design-system.css";
 import "./ui/title-screen.css";
 import "./ui/menu-screens.css";
@@ -34,7 +34,7 @@ import type {
   RacerStatePacket,
 } from "../shared/multiplayer.ts";
 
-type Screen = "title" | "campaign" | "character" | "multiplayer" | "playing" | "paused" | "results" | "settings" | "controls";
+type Screen = "title" | "journey" | "campaign" | "character" | "multiplayer" | "playing" | "paused" | "results" | "settings" | "controls";
 type MapProjection = { minX: number; spanX: number; startX: number; finishX: number };
 type SnowballSpecial = { active: boolean; owner: CharacterId; s: number; x: number; lap: number; hit: Set<CharacterId> };
 type NetworkOpponentTarget = { state: NetworkRacerState; receivedAt: number };
@@ -47,6 +47,7 @@ const hud = document.querySelector<HTMLElement>("#hud")!;
 const menu = document.querySelector<HTMLElement>("#menu")!;
 const titleScreen = document.querySelector<HTMLElement>("#title-screen")!;
 const campaignScreen = document.querySelector<HTMLElement>("#campaign-screen")!;
+const journeyScreen = document.querySelector<HTMLElement>("#journey-screen")!;
 const characterScreen = document.querySelector<HTMLElement>("#character-screen")!;
 const multiplayerScreen = document.querySelector<HTMLElement>("#multiplayer-screen")!;
 const pauseScreen = document.querySelector<HTMLElement>("#pause-screen")!;
@@ -117,6 +118,8 @@ let settingsReturn: Screen = "title";
 let selectedCourseIndex = 0;
 const campaignTest = new URLSearchParams(location.search).get("dev") === "1" && new URLSearchParams(location.search).get("campaign-test") === "1";
 let campaignSave = readCampaign(safeStorageGet("neve-brava.campaign.v1"));
+let soloMode: "campaign" | "arcade" = "arcade";
+let campaignPodium = false;
 const canPlayCourse = (id: string) => campaignTest || courseUnlocked(campaignSave, id);
 let selectedCharacter: CharacterId = "snowman";
 let characterSelectionActive = false;
@@ -344,7 +347,8 @@ function showScreen(next: Screen): void {
   screen = next;
   document.body.dataset.screen = next;
   menu.dataset.screen = next;
-  canvas.classList.toggle("menu-art-hidden", ["title", "campaign", "character", "multiplayer", "settings", "controls", "results"].includes(next));
+  canvas.classList.toggle("menu-art-hidden", ["title", "journey", "campaign", "character", "multiplayer", "settings", "controls", "results"].includes(next));
+  journeyScreen.classList.toggle("hidden", next !== "journey");
   titleScreen.classList.toggle("hidden", next !== "title");
   campaignScreen.classList.toggle("hidden", next !== "campaign");
   characterScreen.classList.toggle("hidden", next !== "character");
@@ -359,13 +363,14 @@ function showScreen(next: Screen): void {
   const liftActive = next === "playing" && state.liftTime > 0;
   liftTransition.classList.toggle("active", liftActive);
   liftTransition.setAttribute("aria-hidden", String(!liftActive));
-  const activeScreen = [titleScreen, campaignScreen, characterScreen, multiplayerScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen]
+  const activeScreen = [titleScreen, journeyScreen, campaignScreen, characterScreen, multiplayerScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen]
     .find(element => !element.classList.contains("hidden"));
   if (activeScreen) activeScreen.scrollTop = 0;
   window.setTimeout(focusFirst, 30);
 }
 
-function openCampaign(): void {
+function openArcade(): void {
+  soloMode = "arcade";
   if (multiplayerActive || multiplayerRoom) leaveMultiplayer();
   if (!canPlayCourse(COURSES[selectedCourseIndex].id)) selectedCourseIndex = 0;
   audio.setMenuTrack();
@@ -376,6 +381,39 @@ function openCampaign(): void {
   updateSelectedCourseCopy();
   showScreen("campaign");
 }
+
+function persistCampaign(): void {
+  if (!campaignTest) safeStorageSet("neve-brava.campaign.v1", JSON.stringify(campaignSave));
+}
+
+function openCampaign(): void {
+  if (multiplayerActive || multiplayerRoom) leaveMultiplayer();
+  soloMode = "campaign";
+  audio.setMenuTrack();
+  audio.start();
+  view.setSelectionMode(false);
+  const stage = campaignSave.run?.stage ?? 0;
+  const complete = stage === CAMPAIGN_ORDER.length;
+  $("#journey-status").textContent = complete ? "Você conquistou a montanha!" : campaignSave.run ? `Próxima parada · ${COURSES.find(course => course.id === CAMPAIGN_ORDER[stage])!.name}` : "Sua jornada começa no Vale Bravo.";
+  $("#journey-progress").innerHTML = CAMPAIGN_CHAPTERS.map(chapter => `<div><h3>${chapter.name}</h3>${chapter.courses.map(id => {
+    const index = CAMPAIGN_ORDER.indexOf(id);
+    return `<p class="${index < stage ? "done" : index === stage && !complete ? "current" : ""}"><span>${index < stage ? "✓" : String(index + 1).padStart(2, "0")}</span>${COURSES.find(course => course.id === id)!.name}</p>`;
+  }).join("")}</div>`).join("");
+  $("#journey-continue").toggleAttribute("disabled", !campaignSave.run || complete);
+  $("#journey-confirm").classList.add("hidden");
+  showScreen("journey");
+}
+
+function continueCampaign(): void {
+  const id = CAMPAIGN_ORDER[campaignSave.run?.stage ?? -1];
+  if (!id) return;
+  selectedCourseIndex = COURSES.findIndex(course => course.id === id);
+  const character = campaignSave.run?.character as CharacterId | undefined;
+  if (character) { selectedCharacter = character; hasChosenCharacter = true; startRun(); }
+  else { hasChosenCharacter = false; openCharacterSelect(); }
+}
+
+function returnToSoloMenu(): void { if (soloMode === "campaign") openCampaign(); else openArcade(); }
 
 function multiplayerProfile(): { name: string; character: MultiplayerCharacterId } {
   const name = ($("#multiplayer-name") as HTMLInputElement).value.trim().slice(0, 16) || "PILOTO";
@@ -572,6 +610,10 @@ function startRun(): void {
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
   if (!characterSelectionActive && !hasChosenCharacter) return;
   hasChosenCharacter = true;
+  if (!multiplayerActive && soloMode === "campaign" && campaignSave.run) {
+    campaignSave = { ...campaignSave, run: { ...campaignSave.run, character: selectedCharacter } };
+    persistCampaign();
+  }
   requestMobileImmersiveMode();
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
@@ -653,13 +695,14 @@ function finish(): void {
       <b>${entry.name}</b>${entry.player ? "<em>VOCÊ</em>" : ""}
       <time>${formatTime(entry.time)}</time>
     </li>`).join("");
-  if (!multiplayerActive && !campaignTest) {
-    campaignSave = recordCampaign(campaignSave, course.id, standings.findIndex(entry => entry.player) + 1, state.elapsed);
-    safeStorageSet("neve-brava.campaign.v1", JSON.stringify(campaignSave));
+  campaignPodium = standings.findIndex(entry => entry.player) < 3;
+  if (!multiplayerActive) {
+    campaignSave = finishCampaignStage(campaignSave, soloMode, course.id, standings.findIndex(entry => entry.player) + 1, state.elapsed);
+    persistCampaign();
   }
-  const finalCourse = course.id === CAMPAIGN_ORDER.at(-1) && (campaignSave.results[course.id]?.place ?? 4) <= 3;
-  $("#next-track-button").textContent = multiplayerActive ? "✕ VOLTAR AO MULTIPLAYER" : finalCourse ? "✕ CAMPANHA CONCLUÍDA!" : nextCampaignCourse(campaignSave, course.id) || campaignTest ? "✕ PRÓXIMA PISTA" : "✕ TENTAR O PÓDIO";
-  $("#restart-button").classList.toggle("hidden", multiplayerActive);
+  const finalCourse = campaignSave.run?.stage === CAMPAIGN_ORDER.length;
+  $("#next-track-button").textContent = multiplayerActive ? "✕ VOLTAR AO MULTIPLAYER" : soloMode === "arcade" ? "✕ ESCOLHER PISTA" : finalCourse ? "✕ CAMPANHA CONCLUÍDA!" : campaignPodium ? "✕ PRÓXIMA PISTA" : "✕ TENTAR O PÓDIO";
+  $("#restart-button").classList.toggle("hidden", multiplayerActive || soloMode === "campaign");
   showScreen("results");
 }
 
@@ -1111,7 +1154,7 @@ function updateControllerStatus(): void {
 }
 
 function focusables(): HTMLElement[] {
-  const active = [titleScreen, campaignScreen, characterScreen, multiplayerScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen].find(element => !element.classList.contains("hidden"));
+  const active = [titleScreen, journeyScreen, campaignScreen, characterScreen, multiplayerScreen, pauseScreen, resultsScreen, settingsScreen, controlsScreen].find(element => !element.classList.contains("hidden"));
   return active ? Array.from(active.querySelectorAll<HTMLElement>(".focusable:not(:disabled)")) : [];
 }
 function focusFirst(): void {
@@ -1121,7 +1164,7 @@ function focusFirst(): void {
     (document.activeElement as HTMLElement | null)?.blur();
     return;
   }
-  const preferred = screen === "campaign"
+  const preferred = screen === "journey" ? $(campaignSave.run && campaignSave.run.stage < CAMPAIGN_ORDER.length ? "#journey-continue" : "#journey-new") : screen === "campaign"
     ? document.querySelector<HTMLElement>(`[data-track-index="${selectedCourseIndex}"]`)
     : screen === "multiplayer"
       ? multiplayerRoom ? $("#ready-button") : $("#quick-match-button")
@@ -1186,9 +1229,9 @@ function updateMenuInput(): void {
     ensureMenuMusic();
     if (screen === "settings") closeSettings();
     else if (screen === "controls") showScreen("settings");
-    else if (screen === "character") openCampaign();
+    else if (screen === "character") returnToSoloMenu();
     else if (screen === "multiplayer") { leaveMultiplayer(); showScreen("title"); }
-    else if (screen === "campaign") showScreen("title");
+    else if (screen === "campaign" || screen === "journey") showScreen("title");
     else if (screen === "paused") resume();
   }
   if (input.consumeMenu("pause") && screen === "paused" && !disconnectedPause) resume();
@@ -1304,6 +1347,21 @@ function frame(now: number): void {
 }
 
 $("#campaign-button").addEventListener("click", openCampaign);
+$("#arcade-button").addEventListener("click", openArcade);
+$("#journey-back").addEventListener("click", () => showScreen("title"));
+$("#journey-continue").addEventListener("click", continueCampaign);
+function beginNewCampaign(): void {
+  campaignSave = newCampaign(campaignSave);
+  persistCampaign();
+  continueCampaign();
+}
+$("#journey-new").addEventListener("click", () => {
+  if (!campaignSave.run) { beginNewCampaign(); return; }
+  $("#journey-confirm").classList.remove("hidden");
+  $("#journey-cancel").focus();
+});
+$("#journey-restart").addEventListener("click", beginNewCampaign);
+$("#journey-cancel").addEventListener("click", () => { $("#journey-confirm").classList.add("hidden"); $("#journey-new").focus(); });
 $("#multiplayer-button").addEventListener("click", openMultiplayer);
 $("#multiplayer-back-button").addEventListener("click", () => { leaveMultiplayer(); showScreen("title"); });
 $("#create-room-button").addEventListener("click", () => void multiplayerOperation(() => multiplayer.createRoom(multiplayerProfile())));
@@ -1362,7 +1420,7 @@ installButton.addEventListener("click", async () => {
 });
 $("#campaign-back-button").addEventListener("click", () => showScreen("title"));
 startButton.addEventListener("click", openCharacterSelect);
-$("#character-back-button").addEventListener("click", openCampaign);
+$("#character-back-button").addEventListener("click", returnToSoloMenu);
 $("#character-confirm-button").addEventListener("click", startRun);
 document.querySelectorAll<HTMLButtonElement>("[data-character]").forEach(button => button.addEventListener("click", () => {
   selectCharacter(button.dataset.character as CharacterId);
@@ -1377,16 +1435,14 @@ document.querySelectorAll<HTMLButtonElement>("[data-controls-tab]").forEach(butt
   showControlsPanel(button.dataset.controlsTab as "dualsense" | "keyboard");
 }));
 $("#resume-button").addEventListener("click", resume);
-$("#quit-button").addEventListener("click", openCampaign);
+$("#quit-button").addEventListener("click", returnToSoloMenu);
 $("#restart-button").addEventListener("click", startRun);
 $("#result-title-button").addEventListener("click", () => { if (multiplayerActive || multiplayerRoom) leaveMultiplayer(); showScreen("title"); });
 $("#next-track-button").addEventListener("click", () => {
   if (multiplayerActive) { leaveMultiplayer(); openMultiplayer(); return; }
-  const id = COURSES[selectedCourseIndex].id;
-  const next = campaignTest ? CAMPAIGN_ORDER[CAMPAIGN_ORDER.indexOf(id) + 1] : nextCampaignCourse(campaignSave, id);
-  if (next) { selectedCourseIndex = COURSES.findIndex(course => course.id === next); startRun(); }
-  else if (id === CAMPAIGN_ORDER.at(-1) && (campaignSave.results[id]?.place ?? 4) <= 3) openCampaign();
-  else startRun();
+  if (soloMode === "arcade") { openArcade(); return; }
+  if (campaignSave.run?.stage === CAMPAIGN_ORDER.length) openCampaign();
+  else continueCampaign();
 });
 
 function safeStorageGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
@@ -1408,9 +1464,9 @@ window.addEventListener("keydown", event => {
     else if (screen === "paused" && !disconnectedPause) resume();
     else if (screen === "settings") closeSettings();
     else if (screen === "controls") showScreen("settings");
-    else if (screen === "character") openCampaign();
+    else if (screen === "character") returnToSoloMenu();
     else if (screen === "multiplayer") { leaveMultiplayer(); showScreen("title"); }
-    else if (screen === "campaign") showScreen("title");
+    else if (screen === "campaign" || screen === "journey") showScreen("title");
   }
   if (event.key.toLowerCase() === "d" && event.altKey) view.setDebug(true);
 });

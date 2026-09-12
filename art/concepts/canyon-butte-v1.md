@@ -1,0 +1,7 @@
+# Canyon butte — concept v1
+
+Generated with the built-in image generation tool. Reference for image-to-3D, not yet integrated as a game model.
+
+## Prompt
+
+Use case: stylized-concept. Asset type: single isolated environment prop concept for image-to-3D reconstruction for the cartoon racing game Snow Rush. Primary request: one substantial rust-red sandstone canyon butte / rocky hill, natural asymmetric rugged silhouette, tall fractured cliff walls with irregular angular ledges, offset flat summit with a few broken rocky peaks, clearly modeled horizontal sedimentary layers and broad vertical erosion grooves, stepped eroded rocky skirt attached to the main mass. Not a smooth truncated cone or pudding shape. Warm terracotta, ochre and muted sandy beige strata. Polished stylized 3D game asset, chunky readable forms, moderate detail, matte stone, not photorealistic. Single three-quarter perspective view at slightly elevated angle showing front, side and summit. Entire object centered, fully visible with generous margin including its complete base. Plain white background, soft neutral studio lighting, minimal contact shadow. The base is rock and irregular, no display plinth. One contiguous solid rock formation only; no separate loose rocks, no scenery, no sky, no vegetation, snow, buildings, roads, characters, text, labels or watermark. No multiple views or collage. Geometry and silhouette should carry detail rather than painted shadows; suitable as a clear reference for producing one reusable 3D canyon prop.

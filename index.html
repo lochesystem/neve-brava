@@ -118,6 +118,7 @@
             <p class="title-intro sr-copy">Escolha seu piloto, domine as curvas e deixe seus rivais na neve.</p>
             <div class="menu-actions">
               <button id="campaign-button" class="primary focusable sr-button sr-button--primary"><svg class="sr-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 4 12 8-12 8Z" fill="currentColor"/></svg> MODO CAMPANHA</button>
+              <button id="arcade-button" class="secondary focusable sr-button sr-button--quiet">◆ MODO ARCADE</button>
               <button id="multiplayer-button" class="secondary multiplayer-title-button focusable sr-button sr-button--pine"><svg class="sr-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-4a5 5 0 0 0-2-4"/></svg> MULTIPLAYER</button>
               <button id="install-button" class="secondary install-button focusable hidden sr-button sr-button--quiet"><span aria-hidden="true">↓</span> INSTALAR JOGO</button>
               <button id="settings-button" class="secondary focusable sr-button sr-button--quiet"><svg class="sr-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v18M12 3v18M19 3v18M2 8h6m1 8h6m1-10h6"/></svg> CONFIGURAÇÕES</button>
@@ -192,9 +193,18 @@
         <span id="multiplayer-connection" class="multiplayer-connection">CONECTANDO…</span>
       </section>
 
+      <section id="journey-screen" class="sr-menu screen campaign-screen journey-screen hidden">
+        <header class="campaign-head"><div><p class="eyebrow">MODO CAMPANHA</p><h2>Conquiste a montanha</h2><p>Chegue entre os 3 primeiros para avançar e liberar a próxima pista no Arcade.</p></div><button id="journey-back" class="secondary focusable sr-button sr-button--quiet">← VOLTAR</button></header>
+        <h3 id="journey-status" aria-live="polite"></h3>
+        <div id="journey-progress" class="journey-progress"></div>
+        <div class="journey-actions"><button id="journey-continue" class="primary focusable sr-button sr-button--primary">▶ CONTINUAR</button><button id="journey-new" class="secondary focusable sr-button sr-button--quiet">NOVO JOGO</button></div>
+        <div id="journey-confirm" class="journey-confirm hidden"><p>Recomeçar da primeira etapa? As pistas já liberadas no Arcade serão mantidas.</p><button id="journey-cancel" class="secondary focusable sr-button sr-button--quiet">CANCELAR</button><button id="journey-restart" class="primary focusable sr-button sr-button--primary">RECOMEÇAR</button></div>
+        <p class="journey-note">Progresso salvo automaticamente neste navegador. Cada etapa tem 3 voltas.</p>
+      </section>
+
       <section id="campaign-screen" class="sr-menu screen campaign-screen hidden">
         <header class="campaign-head">
-          <div><p class="eyebrow">MODO CAMPANHA</p><h2>Mapa da montanha</h2><p>Conquiste o pódio para abrir a próxima etapa. Seu progresso fica salvo neste navegador.</p></div>
+          <div><p class="eyebrow">MODO ARCADE</p><h2>Escolha sua pista</h2><p>Corra nas pistas liberadas pela campanha. Corridas Arcade não alteram sua progressão.</p></div>
           <button id="campaign-back-button" class="secondary focusable sr-button sr-button--quiet">← VOLTAR</button>
         </header>
         <div class="track-showcase">
@@ -220,7 +230,7 @@
 
       <section id="character-screen" class="sr-menu screen character-screen hidden">
         <header class="character-head">
-          <button id="character-back-button" class="secondary focusable sr-button sr-button--quiet">← PISTAS</button>
+          <button id="character-back-button" class="secondary focusable sr-button sr-button--quiet">← VOLTAR</button>
           <div><p class="eyebrow">ESCALAÇÃO DA ETAPA</p><h2>Escolha seu piloto</h2><p id="character-course">Vale Bravo · ETAPA 01</p></div>
           <div class="player-flag"><b>1P</b><span id="selected-character-name">—</span></div>
         </header>

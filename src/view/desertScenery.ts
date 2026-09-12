@@ -22,7 +22,7 @@ export function createDesertLodge():THREE.Group {
 }
 
 /** Shared static geometry and instances keep the canyon cheap on mobile. */
-export function createDesertScenery(): THREE.Group {
+export function createDesertScenery(models: THREE.Group[] = []): THREE.Group {
   const group = new THREE.Group();
   const material = (color:number) => new THREE.MeshLambertMaterial({color,side:THREE.DoubleSide});
   const wood=material(0x97613b),rope=material(0xd6bc84),sandstone=material(0xb9744c);
@@ -109,11 +109,66 @@ export function createDesertScenery(): THREE.Group {
     stones.name="bridge-scattered-stones";
     group.add(stones);
   }
+  group.add(createDesertFormations(models));
+  return group;
+}
+
+/** Keep the GLB proportions, center horizontally and anchor the lowest vertex. */
+export function normalizeDesertRock(model: THREE.Group): THREE.Group {
+  model.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(model);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const normalized = new THREE.Group();
+  normalized.add(model);
+  model.position.sub(new THREE.Vector3(center.x, bounds.min.y, center.z));
+  normalized.scale.setScalar(1 / Math.max(size.x, size.z, .001));
+  normalized.updateMatrixWorld(true);
+  return normalized;
+}
+
+export function createDesertFormations(models: THREE.Group[] = []): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "desert-formations";
+  const point=(s:number,x:number,rise=0)=>{
+    const p=courseWorldPoint(s,x);return new THREE.Vector3(p.x,courseHeight(s,x)+rise,p.z);
+  };
+  const sandstone = new THREE.MeshLambertMaterial({color:0xb9744c});
   const formations:Array<{s:number;x:number;scale:THREE.Vector3}>=[];
   for(let s=30;s<getActiveCourse().length;s+=58)for(const side of [-1,1]){
     formations.push({s,x:side*(64+12*Math.sin(s*.037)),scale:new THREE.Vector3(22+8*Math.sin(s),28+15*(1+Math.sin(s*.024)),23)});
   }
-  // Flat-topped mesas instead of snowy pines or triangular distant peaks.
+  if (models.length) {
+    sandstone.dispose();
+    // Separate spatial batches retain frustum culling instead of one huge bound.
+    for (let section=0;section<getActiveCourse().length;section+=350) {
+      models.forEach((model, variant) => {
+        const selected = formations.filter((f,i)=>i % 2 === 0 && Math.floor(i/2)%models.length===variant && f.s>=section && f.s<section+350);
+        // Alternate sides independently of the density reduction.
+        const placements = selected.map(f=>{
+          const side = Math.floor(f.s/58)%2 ? -1 : 1;
+          const bridge=getActiveCourse().forks?.find(b=>b.bridge&&f.s>=b.start&&f.s<=b.end);
+          const width=42+14*(.5+.5*Math.sin(f.s*.077));
+          const p=bridge ? point(f.s,-14,-12) : point(f.s,side*(78+18*Math.sin(f.s*.037)),-1.5);
+          if(bridge) p.x+=side*(215+18*Math.sin(f.s*.024));
+          return new THREE.Matrix4().compose(p,new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),f.s*.019),new THREE.Vector3(width,width,width));
+        });
+        if(!placements.length)return;
+        model.updateMatrixWorld(true);
+        model.traverse(object=>{
+          if(!(object instanceof THREE.Mesh))return;
+          const instances=new THREE.InstancedMesh(object.geometry,object.material,placements.length);
+          instances.userData.persistentEnvironmentAsset=true;
+          instances.receiveShadow=true;
+          placements.forEach((matrix,i)=>instances.setMatrixAt(i,matrix.clone().multiply(object.matrixWorld)));
+          instances.computeBoundingBox();instances.computeBoundingSphere();
+          group.add(instances);
+        });
+      });
+    }
+    return group;
+  }
+  // Procedural fallback while the three GLBs load.
   const cliffs=new THREE.InstancedMesh(new THREE.CylinderGeometry(.72,1,1,7,2),sandstone,formations.length);
   const matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
   formations.forEach((f,i)=>{

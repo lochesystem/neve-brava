@@ -1,17 +1,39 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CAMPAIGN_ORDER, readCampaign, recordCampaign, courseUnlocked, nextCampaignCourse } from "../src/core/campaign.ts";
+import { CAMPAIGN_ORDER, readCampaign, recordCampaign, courseUnlocked, nextCampaignCourse, newCampaign, finishCampaignStage } from "../src/core/campaign.ts";
 import { COINS, ITEM_BOXES, RAMPS, courseHeight, courseTerrainHeight, courseWallX, courseCeiling, courseAdvanceScale, courseWorldPoint, setActiveCourse } from "../src/core/course.ts";
 import { createRider, EMPTY_INTENT, updateRider } from "../src/core/simulation.ts";
 import { createRival, updateRival } from "../src/core/rival.ts";
 afterEach(() => setActiveCourse("vale-bravo"));
 describe("campaign progression", () => {
+  it("saves a sequential run and character; arcade and out-of-order results cannot advance it", () => {
+    let save = newCampaign(readCampaign(null));
+    save.run!.character = "giru";
+    expect(finishCampaignStage(save, "arcade", "vale-bravo", 1, 100)).toBe(save);
+    expect(finishCampaignStage(save, "campaign", "canion-cristal", 1, 100)).toBe(save);
+    save = finishCampaignStage(save, "campaign", "vale-bravo", 4, 100);
+    expect(save.run!.stage).toBe(0);
+    save = finishCampaignStage(save, "campaign", "vale-bravo", 3, 100);
+    expect(save.run).toEqual({ stage: 1, character: "giru" });
+    expect(readCampaign(JSON.stringify(save))).toEqual(save);
+    const restarted = newCampaign(save);
+    expect(courseUnlocked(restarted, "canion-cristal")).toBe(true);
+    expect(restarted.run).toEqual({ stage: 0 });
+    expect(finishCampaignStage(restarted, "campaign", "vale-bravo", 4, 120).run!.stage).toBe(0);
+  });
+  it("migrates legacy progress, completes a run and rejects forged progress", () => {
+    let save = newCampaign(readCampaign(null));
+    for (const id of CAMPAIGN_ORDER) save = finishCampaignStage(save, "campaign", id, 2, 100);
+    expect(save.run!.stage).toBe(CAMPAIGN_ORDER.length);
+    expect(readCampaign(JSON.stringify({version: 1, results: save.results})).run!.stage).toBe(CAMPAIGN_ORDER.length);
+    expect(readCampaign(JSON.stringify({version: 1, results: {}, run: {stage: 6, character: "invalid"}})).run).toEqual({stage: 0});
+  });
   it("unlocks only sequential podiums and survives save round trip", () => {
     let save = readCampaign(null);
     expect(CAMPAIGN_ORDER.filter(id => courseUnlocked(save,id))).toEqual(["vale-bravo"]);
     save = recordCampaign(save,"vale-bravo",4,200);
     expect(nextCampaignCourse(save,"vale-bravo")).toBeNull();
     for (const id of CAMPAIGN_ORDER) { expect(courseUnlocked(save,id)).toBe(true); save = recordCampaign(save,id,3,190); }
-    expect(readCampaign(JSON.stringify(save))).toEqual(save);
+    expect(readCampaign(JSON.stringify(save)).results).toEqual(save.results);
     expect(nextCampaignCourse(save,"pico-tempestade")).toBeNull();
     expect(nextCampaignCourse(save,"unknown")).toBeNull();
   });

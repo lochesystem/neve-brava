@@ -1,9 +1,40 @@
 import {afterEach,describe,expect,it} from "vitest";
 import * as THREE from "three";
 import {setActiveCourse,courseTerrainHeight} from "../src/core/course.ts";
-import {bridgeGroundPoint,createDesertScenery} from "../src/view/desertScenery.ts";
+import {bridgeGroundPoint,createDesertScenery,createDesertFormations,normalizeDesertRock} from "../src/view/desertScenery.ts";
 afterEach(()=>setActiveCourse("vale-bravo"));
 describe("lower bridge scenery",()=>{
+  it("anchors imported rocks without distortion and batches all variants outside the track",()=>{
+    setActiveCourse("canion-ferrugem");
+    const models=[1,2,3].map(height=>{
+      const scene=new THREE.Group();
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(2,height,1),new THREE.MeshBasicMaterial());
+      mesh.position.set(5,7,3);scene.add(mesh);
+      const model=normalizeDesertRock(scene);
+      const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
+      expect(bounds.min.y).toBeCloseTo(0);
+      expect(bounds.getCenter(new THREE.Vector3()).x).toBeCloseTo(0);
+      expect(size.y/size.x).toBeCloseTo(height/2);
+      return model;
+    });
+    const root=createDesertFormations(models);
+    const geometrySet=new Set<THREE.BufferGeometry>();
+    root.traverse(object=>{
+      if(!(object instanceof THREE.InstancedMesh))return;
+      geometrySet.add(object.geometry);
+      expect(object.count).toBeLessThanOrEqual(3);
+      expect(object.userData.persistentEnvironmentAsset).toBe(true);
+      const matrix=new THREE.Matrix4();
+      for(let i=0;i<object.count;i++){
+        object.getMatrixAt(i,matrix);
+        expect(matrix.elements.every(Number.isFinite)).toBe(true);
+        const scale=new THREE.Vector3().setFromMatrixScale(matrix);
+        expect(scale.x).toBeCloseTo(scale.y,4);
+        expect(scale.x).toBeCloseTo(scale.z,4);
+      }
+    });
+    expect(geometrySet.size).toBe(3);
+  });
   it("joins the route exactly and leaves a gently sloped shoulder",()=>{
     const c=setActiveCourse("canion-ferrugem"),f=c.forks![0];
     for(let s=f.start;s<=f.end;s+=10){

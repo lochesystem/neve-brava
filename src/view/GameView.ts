@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { COURSE_PANORAMAS } from "./coursePanoramas.ts";
 import { createCourseStructures } from "./courseStructures.ts";
-import { createDesertScenery, createDesertLodge } from "./desertScenery.ts";
+import { createDesertScenery, createDesertLodge, createDesertFormations, normalizeDesertRock } from "./desertScenery.ts";
 import { bridgeContactRotation, bridgeBoardClearance } from "./bridgeContact.ts";
 import { createFinaleScenery } from "./finaleScenery.ts";
 import { courseCeiling, courseWallX, isBridgeSurface } from "../core/course.ts";
@@ -648,6 +648,8 @@ export class GameView {
   private logModel: THREE.Group | null = null;
   private fenceObstacleModel: THREE.Group | null = null;
   private rampModel: THREE.Group | null = null;
+  private desertRockModels: THREE.Group[] = [];
+  private desertRocksRequested = false;
   private startGateModel: THREE.Mesh | null = null;
   private finishGateModel: THREE.Mesh | null = null;
   private obstacleTreeSlots: TreeModelSlot[] = [];
@@ -973,6 +975,28 @@ export class GameView {
       object.userData.persistentEnvironmentAsset = true;
     });
     return normalized;
+  }
+
+  private loadDesertRocks(): void {
+    if(this.desertRocksRequested)return;
+    this.desertRocksRequested=true;
+    const loader=new GLTFLoader();
+    Promise.all([1,2,3].map(index=>loader.loadAsync(`${import.meta.env.BASE_URL}models/canyon-rock-${index}.glb`)))
+      .then(assets=>{
+        this.desertRockModels=assets.map(asset=>normalizeDesertRock(asset.scene));
+        if(getActiveCourse().biome!=="desert")return;
+        const old=this.world.getObjectByName("desert-formations");
+        if(!old?.parent)return;
+        const parent=old.parent;
+        old.traverse(object=>{
+          if(!(object instanceof THREE.Mesh))return;
+          if(object instanceof THREE.InstancedMesh)object.dispose();
+          object.geometry.dispose();
+          for(const material of Array.isArray(object.material)?object.material:[object.material])material.dispose();
+        });
+        parent.remove(old);
+        parent.add(createDesertFormations(this.desertRockModels));
+      }).catch(error=>console.warn("Rochas do cânion indisponíveis; mantendo cenário procedural.",error));
   }
 
   private loadEnvironmentModels(): void {
@@ -2060,7 +2084,7 @@ export class GameView {
     }
 
     this.world.add(createCourseStructures());
-    if(desert)this.world.add(createDesertScenery());
+    if(desert){this.world.add(createDesertScenery(this.desertRockModels));this.loadDesertRocks();}
     else this.createSnowfall();
     if(getActiveCourse().id==="pico-tempestade")this.world.add(createFinaleScenery());
   }
