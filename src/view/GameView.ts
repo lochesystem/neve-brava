@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TurboBlur, turboBlurTarget } from "./turboBlur.ts";
 import { COURSE_PANORAMAS } from "./coursePanoramas.ts";
 import { createCourseStructures } from "./courseStructures.ts";
 import { createDesertScenery, createDesertLodge, createDesertFormations, normalizeDesertRock } from "./desertScenery.ts";
@@ -665,6 +666,7 @@ export class GameView {
   private particles: Particle[] = [];
   private playerGrabPose: ((amount: number) => void) | null = null;
   private playerGrabAmount = 0;
+  private turboBlur = new TurboBlur();
   private ridePoses = new WeakMap<THREE.Group, ReturnType<typeof bindSnowmanRidePose>>();
   private hairPoses = new WeakMap<THREE.Group, ReturnType<typeof bindGiruHair>>();
   private remoteGrabPoses = new WeakMap<THREE.Group, { apply: (amount: number) => void; amount: number }>();
@@ -1446,7 +1448,10 @@ export class GameView {
     this.updateOpponent(giruState, this.giru, this.giruVisual, this.giruShadow, dt);
     this.updateWindTarget(windTargetId, rivalState, guyState, giruState);
     this.updateSelectionRing(state, rivalState, guyState, giruState);
+    this.renderer.info.autoReset = false;
+    this.renderer.info.reset();
     this.renderer.render(this.scene, this.camera);
+    this.turboBlur.render(this.renderer, turboBlurTarget(state.turboTime, state.specialTurboTime, !this.selectionMode && state.liftTime <= 0 && state.recovering <= 0 && state.freezeTime <= 0), dt);
     this.performanceOverlay.update(this.renderer.info, this.particles.length, this.particlePool.length);
   }
 
