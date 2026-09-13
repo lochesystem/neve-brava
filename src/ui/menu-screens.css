@@ -1,4 +1,14 @@
 /* Alpine Lodge menu migration. Keep gameplay HUD and layout/navigation intact. */
+.sr-menu .character-roster { grid-template-columns:repeat(5,minmax(0,1fr)); width:min(1260px,100%); }
+.sr-menu .character-card.cactus { background:#b2c977; }
+.sr-menu .character-card.cactus .character-portrait { object-fit:cover; object-position:center; background:#fff; }
+.sr-menu .character-card.cactus.locked { opacity:1; }
+.sr-menu .character-card.cactus.locked .character-portrait { visibility:hidden; }
+.sr-menu .character-card.cactus.locked::after { content:"?"; position:absolute; top:32%; left:0; width:100%; font:bold 100px var(--sr-display); text-align:center; color:var(--sr-pine); opacity:.5; }
+.sr-menu .character-card.cactus.locked small { display:block; font-size:12px; }
+@media(max-width:650px) and (orientation:portrait) {
+  .sr-menu .character-roster { grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); }
+}
 .journey-progress { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:24px 0; }
 .journey-progress > div { background:#e6d9bd; border:2px solid #b59b74; border-radius:12px; padding:18px; }
 .journey-progress h3 { font-family:var(--sr-display); margin:0 0 16px; font-size:24px; }

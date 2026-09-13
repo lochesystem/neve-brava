@@ -6,9 +6,10 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { createYetiGrabRig } from "../src/experiments/yetiGrabRig.ts";
 import { createGiruGrabRig } from "../src/experiments/giruGrabRig.ts";
 import { createGuyGrabRig } from "../src/experiments/guyGrabRig.ts";
+import { createCactusGrabRig } from "../src/experiments/cactusGrabRig.ts";
 import { createCharacterGrabModel, bindCharacterGrab } from "../src/view/characterGrab.ts";
 
-it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creates normalized finite skinning weights", character => {
+it.each(["snow-main", "yeti", "giru", "guy-v2", "cactus"])("preserves %s at rest and creates normalized finite skinning weights", character => {
   const bytes = readFileSync(new URL(`../public/models/${character}.glb`, import.meta.url));
   const jsonLength = bytes.readUInt32LE(12);
   const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
@@ -23,7 +24,7 @@ it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creat
   geometry.setAttribute("position", attribute(primitive.attributes.POSITION, 3));
   geometry.setIndex(attribute(primitive.indices, 1));
   const original = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
-  const rig = character === "guy-v2" ? createGuyGrabRig(original) : character === "giru" ? createGiruGrabRig(original) : character === "yeti" ? createYetiGrabRig(original) : createSnowmanGrabRig(original);
+  const rig = character === "cactus" ? createCactusGrabRig(original) : character === "guy-v2" ? createGuyGrabRig(original) : character === "giru" ? createGiruGrabRig(original) : character === "yeti" ? createYetiGrabRig(original) : createSnowmanGrabRig(original);
   const positions = geometry.getAttribute("position");
   const weights = rig.mesh.geometry.getAttribute("skinWeight");
   rig.applyPose(0); rig.mesh.updateMatrixWorld(true); rig.mesh.skeleton.update();
@@ -69,7 +70,7 @@ it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creat
     expect(hair.every(bone => bone.quaternion.equals(new THREE.Quaternion()))).toBe(true);
   }
   if (character !== "snow-main") {
-    const id=character==="guy-v2"?"guy":character as "yeti"|"giru";
+    const id=character==="guy-v2"?"guy":character as "yeti"|"giru"|"cactus";
     const template=createCharacterGrabModel(original,id);
     const first=clone(template),second=clone(template);
     const apply=bindCharacterGrab(first)!;
@@ -82,7 +83,7 @@ it.each(["snow-main", "yeti", "giru", "guy-v2"])("preserves %s at rest and creat
     expect(template.getObjectByName(bodyName)!.position.y).toBe(restY);
     apply(0);
     expect(first.getObjectByName(bodyName)!.position.y).toBeCloseTo(restY);
-    const boardVertices = Array.from({ length: positions.count }, (_, i) => i).filter(i => weights.getX(i) === 1);
+    const boardVertices = Array.from({ length: positions.count }, (_, i) => i).filter(i => weights.getX(i) === 1 && (character !== "cactus" || rig.mesh.geometry.getAttribute("skinIndex").getX(i) === 2));
     expect(boardVertices.length).toBeGreaterThan(200);
     const a = boardVertices[0], b = boardVertices[Math.floor(boardVertices.length / 2)];
     const posedDistance = rig.mesh.getVertexPosition(a, new THREE.Vector3()).distanceTo(rig.mesh.getVertexPosition(b, new THREE.Vector3()));

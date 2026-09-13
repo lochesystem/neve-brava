@@ -3,8 +3,26 @@ import { CAMPAIGN_ORDER, readCampaign, recordCampaign, courseUnlocked, nextCampa
 import { COINS, ITEM_BOXES, RAMPS, courseHeight, courseTerrainHeight, courseWallX, courseCeiling, courseAdvanceScale, courseWorldPoint, setActiveCourse } from "../src/core/course.ts";
 import { createRider, EMPTY_INTENT, updateRider } from "../src/core/simulation.ts";
 import { createRival, updateRival } from "../src/core/rival.ts";
+import { characterUnlocked } from "../src/core/campaign.ts";
 afterEach(() => setActiveCourse("vale-bravo"));
 describe("campaign progression", () => {
+  it("unlocks cactus only after the canyon podium and preserves the unlock on new game", () => {
+    let save = newCampaign(readCampaign(null));
+    expect(characterUnlocked(save,"cactus")).toBe(false);
+    expect(characterUnlocked(recordCampaign(save,"canion-ferrugem",1,100),"cactus")).toBe(false);
+    for (const id of CAMPAIGN_ORDER) {
+      if(id === "canion-ferrugem") break;
+      save = finishCampaignStage(save,"campaign",id,3,100);
+    }
+    expect(characterUnlocked(finishCampaignStage(save,"campaign","canion-ferrugem",4,100),"cactus")).toBe(false);
+    expect(characterUnlocked(finishCampaignStage(save,"arcade","canion-ferrugem",1,100),"cactus")).toBe(false);
+    save=finishCampaignStage(save,"campaign","canion-ferrugem",3,100);
+    expect(characterUnlocked(save,"cactus")).toBe(true);
+    save.run!.character="cactus";
+    expect(readCampaign(JSON.stringify(save)).run!.character).toBe("cactus");
+    expect(characterUnlocked(newCampaign(readCampaign(JSON.stringify(save))),"cactus")).toBe(true);
+    expect(readCampaign(JSON.stringify({version:1,results:{},run:{stage:0,character:"cactus"}})).run!.character).toBeUndefined();
+  });
   it("saves a sequential run and character; arcade and out-of-order results cannot advance it", () => {
     let save = newCampaign(readCampaign(null));
     save.run!.character = "giru";

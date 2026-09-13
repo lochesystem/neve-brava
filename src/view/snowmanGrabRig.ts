@@ -68,9 +68,46 @@ export function bindSnowmanGrabPose(mesh: THREE.Object3D) {
     board.position.set(0, .09 + .11 * t, .13 * t);
     board.rotation.x = -.32 * t;
     body.position.set(0, .4 - .12 * t, -.015 * t);
-    body.rotation.x = .22 * t;
+    body.rotation.set(.22 * t, 0, 0);
     left.rotation.set(-.65 * t, 0, .52 * t);
     right.rotation.set(-.65 * t, 0, -.52 * t);
   };
   return applyPose;
+}
+
+/** Add after the grab pose has reset the bones each frame. No geometry changes,
+ * allocations or simulated physics: shoulders follow the balance shift with lag. */
+export function bindSnowmanRidePose(mesh: THREE.Object3D) {
+  const body = mesh.getObjectByName("body")!;
+  const left = mesh.getObjectByName("left-arm")!;
+  const right = mesh.getObjectByName("right-arm")!;
+  let torso = 0, arms = 0, idlePhase = 0;
+  return (dt: number, carve: number, speed: number, active: boolean, grab = 0) => {
+    const delta = THREE.MathUtils.clamp(dt, 0, .1);
+    const target = active ? THREE.MathUtils.clamp(carve, -1, 1) * THREE.MathUtils.smoothstep(speed, 2, 25) : 0;
+    torso = THREE.MathUtils.damp(torso, target, 9, delta);
+    arms = THREE.MathUtils.damp(arms, torso, 5, delta);
+    // Suppress immediately for falls/freeze/air; never overwrite the grab.
+    const weight = active ? 1 - THREE.MathUtils.smoothstep(grab, 0, .8) : 0;
+    const lean = torso * weight, balance = arms * weight;
+    // A relaxed 3.8-second breath, with shoulders trailing the torso.
+    // Translate/rotate rigid snowballs rather than scaling the mesh like rubber.
+    if (active) idlePhase = (idlePhase + delta * Math.PI * 2 / 3.8) % (Math.PI * 2);
+    const idle = weight * (1 - THREE.MathUtils.smoothstep(Math.abs(torso), .08, .7));
+    const breath = Math.sin(idlePhase), shoulder = Math.sin(idlePhase - .35);
+    // Exaggerate the silhouette for the distant chase camera, not the tempo.
+    body.position.y += breath * .012 * idle;
+    body.rotation.x += breath * .028 * idle;
+    body.rotation.z += Math.sin(idlePhase * 2) * .014 * idle;
+    left.rotation.x += shoulder * .105 * idle;
+    right.rotation.x += Math.sin(idlePhase - .55) * .084 * idle;
+    left.rotation.z += shoulder * .075 * idle;
+    right.rotation.z -= shoulder * .075 * idle;
+    body.rotation.x += lean * .055;
+    body.rotation.y += lean * .045;
+    left.rotation.x += balance * .20;
+    right.rotation.x -= balance * .16;
+    left.rotation.z += Math.max(0, balance) * .22 + Math.min(0, balance) * .09;
+    right.rotation.z += Math.min(0, balance) * .22 + Math.max(0, balance) * .09;
+  };
 }

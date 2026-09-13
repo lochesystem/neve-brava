@@ -2,17 +2,18 @@ import * as THREE from "three";
 import { createYetiGrabRig } from "../experiments/yetiGrabRig.ts";
 import { createGiruGrabRig } from "../experiments/giruGrabRig.ts";
 import { createGuyGrabRig } from "../experiments/guyGrabRig.ts";
+import { createCactusGrabRig } from "../experiments/cactusGrabRig.ts";
 
 type PoseTrack = { name: string; positions: number[]; rotations: number[] };
 const STEPS = 32;
 
 /** Bake the approved lab poses once, so gameplay never runs IK or skin weighting. */
-export function createCharacterGrabModel(scene: THREE.Object3D, id: "yeti" | "giru" | "guy") {
+export function createCharacterGrabModel(scene: THREE.Object3D, id: "yeti" | "giru" | "guy" | "cactus") {
   let source: THREE.Mesh | undefined;
   scene.traverse(object => { if(object instanceof THREE.Mesh) source=object; });
   const model = new THREE.Group();
   if(!source) { model.add(scene); return model; }
-  const rig = id === "yeti" ? createYetiGrabRig(source) : id === "giru" ? createGiruGrabRig(source) : createGuyGrabRig(source);
+  const rig = id === "cactus" ? createCactusGrabRig(source) : id === "yeti" ? createYetiGrabRig(source) : id === "giru" ? createGiruGrabRig(source) : createGuyGrabRig(source);
   const tracks: PoseTrack[] = rig.bones.filter(b=>!b.name.startsWith("giru-hair")).map(b=>({name:b.name,positions:[],rotations:[]}));
   for(let i=0;i<=STEPS;i++) {
     rig.applyPose(i/STEPS);

@@ -220,6 +220,7 @@ export class BotRaceManager {
       return;
     }
     if (event.type === "RIVAL_SPECIAL") {
+      if (event.character === "cactus") return; // Secret rider is solo-only for now.
       this.applySpecial(runtime, actorId, event.character, bot.s, bot.lap);
       emitAction(runtime.code, { id: actionId(), actorId, type: "special" });
     }

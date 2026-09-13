@@ -107,6 +107,7 @@ export const RIVAL_PROFILES: Record<CharacterId, RivalProfile> = {
   yeti: YETI_PROFILE,
   guy: GUY_PROFILE,
   giru: GIRU_PROFILE,
+  cactus: { ...GUY_PROFILE, id: "cactus", name: "CACTO" },
 };
 
 export function createRival(profile: RivalProfile = YETI_PROFILE): RivalState {
@@ -415,7 +416,7 @@ export function updateRival(state: RivalState, playerProgress: number, playerX: 
     }
   }
   const special = SPECIALS[state.id];
-  if (state.credits >= special.cost && state.specialDecisionTimer <= 0 && state.elapsed > 4) {
+  if (!special.disabled && state.credits >= special.cost && state.specialDecisionTimer <= 0 && state.elapsed > 4) {
     state.credits -= special.cost;
     state.specialDecisionTimer = 11 + state.linePhase;
     if (state.id === "guy") {

@@ -1,5 +1,5 @@
 import "./styles.css";
-import { CAMPAIGN_CHAPTERS, CAMPAIGN_ORDER, readCampaign, newCampaign, finishCampaignStage, courseUnlocked } from "./core/campaign.ts";
+import { CAMPAIGN_CHAPTERS, CAMPAIGN_ORDER, readCampaign, newCampaign, finishCampaignStage, courseUnlocked, characterUnlocked } from "./core/campaign.ts";
 import "./ui/design-system.css";
 import "./ui/title-screen.css";
 import "./ui/menu-screens.css";
@@ -11,7 +11,7 @@ import {
   applyRiderBlizzardSlow, applyRiderFreeze, applyRiderTimeWarp, applyRiderWindHit,
   createRider, interpolateRider, updateRider, type GameEvent, type RiderState,
 } from "./core/simulation.ts";
-import { CHARACTERS, characterById, type CharacterId } from "./core/characters.ts";
+import { opponentCharacters, characterById, type CharacterId } from "./core/characters.ts";
 import { SPECIALS } from "./core/specials.ts";
 import {
   applyBlizzardSlow, applyFreeze, applyTimeWarp, applyWindHit, createRival, GIRU_PROFILE, GUY_PROFILE, interpolateRival, resolveRiderContact, resolveRivalContact,
@@ -121,6 +121,7 @@ let campaignSave = readCampaign(safeStorageGet("neve-brava.campaign.v1"));
 let soloMode: "campaign" | "arcade" = "arcade";
 let campaignPodium = false;
 const canPlayCourse = (id: string) => campaignTest || courseUnlocked(campaignSave, id);
+const canPlayCharacter = (id: string) => campaignTest || characterUnlocked(campaignSave, id);
 let selectedCharacter: CharacterId = "snowman";
 let characterSelectionActive = false;
 let hasChosenCharacter = false;
@@ -569,6 +570,13 @@ function createOpponent(character: CharacterId, startX: number): RivalState {
 }
 
 function updateCharacterSelection(): void {
+  const unlocked = canPlayCharacter("cactus");
+  const cactusCard = $("[data-character=cactus]") as HTMLButtonElement;
+  cactusCard.disabled = !unlocked;
+  cactusCard.classList.toggle("locked", !unlocked);
+  cactusCard.querySelector("strong")!.textContent = unlocked ? "CACTO" : "???";
+  cactusCard.querySelector("small")!.textContent = unlocked ? "O veterano do cânion" : "Pódio no Cânion Ferrugem";
+  cactusCard.setAttribute("aria-label", unlocked ? "Cacto · O veterano do cânion" : "Personagem secreto. Termine Cânion Ferrugem no pódio para liberar.");
   const character = characterById(selectedCharacter);
   $("#selected-character-name").textContent = characterSelectionActive ? character.name.toUpperCase() : "—";
   const confirmButton = $("#character-confirm-button") as HTMLButtonElement;
@@ -582,6 +590,7 @@ function updateCharacterSelection(): void {
 }
 
 function selectCharacter(character: CharacterId): void {
+  if (!canPlayCharacter(character)) return;
   selectedCharacter = character;
   characterSelectionActive = true;
   updateCharacterSelection();
@@ -593,7 +602,7 @@ function openCharacterSelect(): void {
   const course = setActiveCourse(COURSES[selectedCourseIndex].id);
   view.rebuildCourse();
   state = createRider(); previousRider = { ...state };
-  const opponents = CHARACTERS.map(character => character.id).filter(character => character !== selectedCharacter);
+  const opponents = opponentCharacters(selectedCharacter);
   rival = createOpponent(opponents[0], 3.1); previousRival = { ...rival };
   guy = createOpponent(opponents[1], -3.15); previousGuy = { ...guy };
   giru = createOpponent(opponents[2], 7.4); previousGiru = { ...giru };
@@ -606,6 +615,7 @@ function openCharacterSelect(): void {
 }
 
 function startRun(): void {
+  if (!multiplayerActive && !canPlayCharacter(selectedCharacter)) return;
   if (!multiplayerActive && !canPlayCourse(COURSES[selectedCourseIndex].id)) return;
   if (!input.compatible && !input.usingDevFallback && !input.touchEnabled) return;
   if (!characterSelectionActive && !hasChosenCharacter) return;
@@ -622,7 +632,7 @@ function startRun(): void {
   audio.start();
   state = createRider();
   previousRider = { ...state };
-  const opponents = CHARACTERS.map(character => character.id).filter(character => character !== selectedCharacter);
+  const opponents = opponentCharacters(selectedCharacter);
   rival = createOpponent(opponents[0], 3.1);
   previousRival = { ...rival };
   guy = createOpponent(opponents[1], -3.15);
@@ -675,7 +685,7 @@ function finish(): void {
   const projectedTime = (opponent: RivalState) => opponent.finished
     ? opponent.finishTime
     : opponent.elapsed + (RACE_LAPS * COURSE_LENGTH - raceProgress(opponent.lap, opponent.s)) / Math.max(20, opponent.speed);
-  const portraits: Record<CharacterId, string> = { guy: "guy.png", snowman: "snowman.png", yeti: "yeti.png", giru: "giru-v2.png" };
+  const portraits: Record<CharacterId, string> = { guy: "guy.png", snowman: "snowman.png", yeti: "yeti.png", giru: "giru-v2.png", cactus: "cactus.png" };
   const playerCharacter = characterById(selectedCharacter);
   const standings = [
     { id: selectedCharacter, name: playerCharacter.name.toUpperCase(), time: state.elapsed, player: true },
@@ -696,10 +706,12 @@ function finish(): void {
       <time>${formatTime(entry.time)}</time>
     </li>`).join("");
   campaignPodium = standings.findIndex(entry => entry.player) < 3;
+  const cactusWasUnlocked = characterUnlocked(campaignSave, "cactus");
   if (!multiplayerActive) {
     campaignSave = finishCampaignStage(campaignSave, soloMode, course.id, standings.findIndex(entry => entry.player) + 1, state.elapsed);
     persistCampaign();
   }
+  $("#result-unlock").classList.toggle("hidden", multiplayerActive || campaignTest || cactusWasUnlocked || !characterUnlocked(campaignSave, "cactus"));
   const finalCourse = campaignSave.run?.stage === CAMPAIGN_ORDER.length;
   $("#next-track-button").textContent = multiplayerActive ? "✕ VOLTAR AO MULTIPLAYER" : soloMode === "arcade" ? "✕ ESCOLHER PISTA" : finalCourse ? "✕ CAMPANHA CONCLUÍDA!" : campaignPodium ? "✕ PRÓXIMA PISTA" : "✕ TENTAR O PÓDIO";
   $("#restart-button").classList.toggle("hidden", multiplayerActive || soloMode === "campaign");
@@ -901,6 +913,7 @@ function useRivalItem(source: RivalState, item: ItemKind): void {
 }
 
 function useRivalSpecial(source: RivalState): void {
+  if (SPECIALS[source.id].disabled) return;
   showSpecialCutIn(source.id);
   if (source.id === "snowman") {
     snowballSpecial = { active: true, owner: source.id, s: source.s, x: 0, lap: source.lap, hit: new Set() };
@@ -963,6 +976,7 @@ specialCutIn.addEventListener("animationend", () => {
 
 function useCharacterSpecial(): void {
   const special = SPECIALS[selectedCharacter];
+  if (special.disabled) return;
   if (!playerSpecialTest && state.credits < special.cost) {
     input.pulse(.12, .18, 80);
     showToast(`FALTAM ${special.cost - state.credits} MOEDAS`, "coin");
@@ -1114,8 +1128,9 @@ function updateHud(force = false): void {
   itemHud.classList.toggle("active", Boolean(state.item));
   itemHud.setAttribute("aria-label", activeItem ? `Item equipado: ${activeItem}. Use com R3.` : "Slot de item vazio");
   const special = SPECIALS[selectedCharacter];
-  const specialReady = playerSpecialTest || state.credits >= special.cost;
-  specialArt.src = `${import.meta.env.BASE_URL}images/specials/${selectedCharacter}.png`;
+  specialHud.classList.toggle("hidden", Boolean(special.disabled));
+  const specialReady = !special.disabled && (playerSpecialTest || state.credits >= special.cost);
+  if (!special.disabled) specialArt.src = `${import.meta.env.BASE_URL}images/specials/${selectedCharacter}.png`;
   specialHud.dataset.character = selectedCharacter;
   specialHud.classList.toggle("ready", specialReady);
   specialHud.setAttribute("aria-label", playerSpecialTest ? `${special.name}. Modo de teste: sempre disponível. Use com L3.` : `${special.name}. Custa ${special.cost} moedas. Use com L3.`);

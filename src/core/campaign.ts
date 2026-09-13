@@ -18,7 +18,7 @@ export function readCampaign(raw: string | null): CampaignSave {
     if (data.run && Number.isInteger(data.run.stage) && data.run.stage >= 0 && data.run.stage <= CAMPAIGN_ORDER.length) {
       const earned = CAMPAIGN_ORDER.findIndex(id => (clean.results[id]?.place ?? 4) > 3);
       clean.run = { stage: Math.min(data.run.stage, earned < 0 ? CAMPAIGN_ORDER.length : earned) };
-      if (["snowman", "guy", "giru", "yeti"].includes(data.run.character)) clean.run.character = data.run.character;
+      if (["snowman", "guy", "giru", "yeti", "cactus"].includes(data.run.character) && characterUnlocked(clean, data.run.character)) clean.run.character = data.run.character;
     } else if (Object.keys(clean.results).length) {
       const stage = CAMPAIGN_ORDER.findIndex(id => (clean.results[id]?.place ?? 4) > 3);
       clean.run = { stage: stage < 0 ? CAMPAIGN_ORDER.length : stage };
@@ -29,6 +29,10 @@ export function readCampaign(raw: string | null): CampaignSave {
 export function courseUnlocked(save: CampaignSave, id: string): boolean {
   const index = CAMPAIGN_ORDER.indexOf(id);
   return index >= 0 && CAMPAIGN_ORDER.slice(0, index).every(previous => (save.results[previous]?.place ?? 4) <= 3);
+}
+export function characterUnlocked(save: CampaignSave, id: string): boolean {
+  if (id === "cactus") return courseUnlocked(save, "canion-ferrugem") && (save.results["canion-ferrugem"]?.place ?? 4) <= 3;
+  return ["snowman", "yeti", "guy", "giru"].includes(id);
 }
 export function recordCampaign(save: CampaignSave, id: string, place: number, time: number): CampaignSave {
   if (!courseUnlocked(save, id) || !Number.isInteger(place) || place < 1 || place > 4 || !Number.isFinite(time) || time <= 0) return save;
